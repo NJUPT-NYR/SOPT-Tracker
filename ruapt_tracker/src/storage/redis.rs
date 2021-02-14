@@ -10,7 +10,7 @@ use deadpool_redis::{
     Config, ConnectionWrapper, Pipeline, PoolError,
 };
 
-type Conection = managed::Object<ConnectionWrapper, RedisError>;
+type Connection = managed::Object<ConnectionWrapper, RedisError>;
 type Pool = managed::Pool<ConnectionWrapper, RedisError>;
 
 pub struct DB {
@@ -47,7 +47,7 @@ impl DB {
 }
 
 impl DB {
-    async fn get_torrent_con_with_delay(&self) -> TrackerResult<Conection> {
+    async fn get_torrent_con_with_delay(&self) -> TrackerResult<Connection> {
         loop {
             match self.torrent_pool.try_get().await {
                 Ok(con) => break Ok(con),
@@ -59,7 +59,7 @@ impl DB {
             }
         }
     }
-    async fn get_torrent_con_no_delay(&self) -> TrackerResult<Conection> {
+    async fn get_torrent_con_no_delay(&self) -> TrackerResult<Connection> {
         loop {
             match self.torrent_pool.get().await {
                 Ok(con) => break Ok(con),
@@ -68,7 +68,7 @@ impl DB {
             }
         }
     }
-    async fn get_user_con_no_delay(&self) -> TrackerResult<Conection> {
+    async fn get_user_con_no_delay(&self) -> TrackerResult<Connection> {
         loop {
             match self.user_pool.try_get().await {
                 Ok(con) => break Ok(con),
@@ -110,7 +110,7 @@ impl Storage for DB {
         let mut to_con = self.get_torrent_con_no_delay().await?;
         let t = get_timestamp();
         let mut files: HashMap<String, TorrentInfo> = HashMap::new();
-        for t_id in &data.info_hashes {
+        for t_id in &data.info_hash {
             let complete: isize = to_con.zcount(t_id, t, "+inf").await?;
             // TODO: eliminating this clone
             files.insert(t_id.clone(), TorrentInfo::new(complete));
@@ -154,7 +154,6 @@ impl Storage for DB {
                 .zrangebyscore(&t_id, now - 300, "+inf")
                 .await?,
         };
-        // println!("{:?}", ret);
         // todo! {}
         Ok(Some(AnnounceResponseData { peers }))
     }

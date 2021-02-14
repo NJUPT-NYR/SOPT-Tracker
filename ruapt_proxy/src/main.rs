@@ -64,7 +64,6 @@ impl Context {
         AnnounceRequestData {
             info_hash: self.torrents[tid].clone(),
             peer_id: self.users[uid].clone(),
-            torrent_id: tid as u64,
             ip: "localhost".into(),
             port: 8080,
             action: Action::Started,
@@ -80,7 +79,7 @@ async fn main() {
     // let con = pool.get().await?;
     // bench(pool).await;
     let c = Arc::new(Context::new());
-    let h: Vec<tokio::task::JoinHandle<()>> = (1..=10)
+    let h: Vec<tokio::task::JoinHandle<()>> = (1..10)
         .map(|_| tokio::spawn(bench(pool.clone(), c.clone())))
         .collect();
     // todo!()

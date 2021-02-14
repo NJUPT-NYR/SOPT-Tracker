@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 pub struct AnnounceRequestData {
     pub info_hash: String,
     pub peer_id: String,
-    pub torrent_id: u64,
     pub ip: String,
     pub port: i32,
     pub action: Action,

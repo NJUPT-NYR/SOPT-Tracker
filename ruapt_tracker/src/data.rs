@@ -11,7 +11,9 @@ pub struct AnnounceRequestData {
     // pub torrent_id: u64,
     pub ip: String,
     pub port: i32,
+    #[serde(default)]
     pub action: Option<Action>,
+    #[serde(default)]
     pub num_want: Option<isize>,
 }
 
@@ -30,9 +32,10 @@ pub enum Action {
 
 #[derive(Deserialize, Debug)]
 pub struct ScrapeRequestData {
-    pub info_hashes: Vec<String>,
+    pub info_hash: Vec<String>,
 }
 
+#[serde(untagged)]
 #[derive(Deserialize, Debug)]
 pub enum Request {
     Announce(AnnounceRequestData),

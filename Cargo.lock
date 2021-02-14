@@ -1086,6 +1086,7 @@ dependencies = [
  "futures 0.3.8",
  "jemallocator",
  "serde",
+ "serde_bencode",
  "tokio 0.3.3",
  "tokio-util 0.5.0",
 ]
@@ -1115,6 +1116,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b88fa983de7720629c9387e9f517353ed404164b1e482c970a90c1a4aaf7dc1a"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde_bencode"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "934d8bdbaa0126dafaea9a8833424a211d9661897717846c6bb782349ca1c30d"
+dependencies = [
+ "serde",
+ "serde_bytes",
 ]
 
 [[package]]
