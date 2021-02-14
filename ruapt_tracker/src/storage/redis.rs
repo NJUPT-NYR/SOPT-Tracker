@@ -2,6 +2,7 @@ use crate::data::*;
 use crate::error::*;
 use crate::storage::Storage;
 use crate::util::get_timestamp;
+use std::collections::HashMap;
 use async_trait::async_trait;
 use deadpool::managed;
 use deadpool_redis::{
@@ -33,7 +34,7 @@ impl DB {
     /// the info of users.
     pub fn new(torrent_uri: &str, user_uri: &str) -> Self {
         let mut cfg = Config::default();
-        assert!(torrent_uri != user_uri);
+        assert_ne!(torrent_uri, user_uri);
         cfg.url = Some(torrent_uri.to_string());
         let torrent_pool = cfg.create_pool().expect("Create Redis Pool Failed!");
         cfg.url = Some(user_uri.to_string());
@@ -54,7 +55,7 @@ impl DB {
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                     continue;
                 }
-                _ => return Err(TrackerError::RedisError("Pool error".into())),
+                _ => return Err(TrackerError::RedisError("Pool error 1".into())),
             }
         }
     }
@@ -63,16 +64,16 @@ impl DB {
             match self.torrent_pool.get().await {
                 Ok(con) => break Ok(con),
                 Err(PoolError::Timeout(_)) => continue,
-                _ => return Err(TrackerError::RedisError("Pool error".into())),
+                _ => return Err(TrackerError::RedisError("Pool error 2".into())),
             }
         }
     }
     async fn get_user_con_no_delay(&self) -> TrackerResult<Conection> {
         loop {
-            match self.user_pool.get().await {
+            match self.user_pool.try_get().await {
                 Ok(con) => break Ok(con),
                 Err(PoolError::Timeout(_)) => continue,
-                _ => return Err(TrackerError::RedisError("Pool error".into())),
+                _ => return Err(TrackerError::RedisError("Pool error 3".into())),
             }
         }
     }
@@ -102,8 +103,20 @@ impl Storage for DB {
         Ok(())
     }
 
-    async fn scrape(&self) -> TrackerResult<()> {
-        todo! {}
+    async fn scrape(
+        &self,
+        data: &ScrapeRequestData,
+    ) -> TrackerResult<Option<ScrapeResponseData>> {
+        let mut to_con = self.get_torrent_con_no_delay().await?;
+        let t = get_timestamp();
+        let mut files: HashMap<String, TorrentInfo> = HashMap::new();
+        for t_id in &data.info_hashes {
+            let complete: isize = to_con.zcount(t_id, t, "+inf").await?;
+            // TODO: eliminating this clone
+            files.insert(t_id.clone(), TorrentInfo::new(complete));
+        }
+        Ok(Some(ScrapeResponseData{ files }))
+        // todo! {}
     }
 
     async fn announce(
@@ -113,8 +126,8 @@ impl Storage for DB {
         // do nothing, the compaction will remove it
         // in few minutes.
         let mut user_con = self.get_user_con_no_delay().await?;
-        let t_id = format!("to_{}", data.torrent_id);
-        if let Stopped = data.action {
+        let t_id = format!("{}", &data.info_hash);
+        if let Some(Stopped) = data.action {
             user_con.srem(&data.peer_id, &t_id).await?;
             return Ok(None);
         }
@@ -133,9 +146,14 @@ impl Storage for DB {
         p.execute_async(&mut to_con).await?;
         // ZRANGEBYSCORE t_id now-300 +inf LIMIT 0 num_want
         // dup here, maybe rewrite the convert?
-        let peers: Vec<Peer> = to_con
-            .zrangebyscore_limit(&t_id, now - 300, "+inf", 0, data.num_want)
-            .await?;
+        let peers: Vec<Peer> = match data.num_want {
+            Some(num_want) => to_con
+                .zrangebyscore_limit(&t_id, now - 300, "+inf", 0, num_want)
+                .await?,
+            None => to_con
+                .zrangebyscore(&t_id, now - 300, "+inf")
+                .await?,
+        };
         // println!("{:?}", ret);
         // todo! {}
         Ok(Some(AnnounceResponseData { peers }))

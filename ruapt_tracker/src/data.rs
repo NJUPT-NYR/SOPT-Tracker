@@ -1,29 +1,21 @@
 use crate::error::*;
 use serde::{Deserialize, Serialize};
 pub use Action::*;
+use std::collections::HashMap;
 
 #[derive(Deserialize, Debug)]
 pub struct AnnounceRequestData {
     pub info_hash: String,
     pub peer_id: String,
-    pub torrent_id: u64,
+    // is it better to use info hash directly?
+    // pub torrent_id: u64,
     pub ip: String,
     pub port: i32,
-    pub action: Action,
-    pub num_want: isize,
+    pub action: Option<Action>,
+    pub num_want: Option<isize>,
 }
 
 impl AnnounceRequestData {
-    // pub fn new() -> Self {
-    //     AnnounceRequestData {
-    //         info_hash: String::from("ABCDEFG"),
-    //         peer_id: String::from("ASSSSSSS"),
-    //         torrent_id: 12,
-    //         addr: String::from("ASSSSSDASC"),
-    //         action: Action::Started,
-    //         num_want: 100,
-    //     }
-    // }
     pub fn encode_info(&self) -> String {
         format!("{}@{}@{}", self.peer_id, self.ip, self.port)
     }
@@ -34,6 +26,17 @@ pub enum Action {
     Completed,
     Started,
     Stopped,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ScrapeRequestData {
+    pub info_hashes: Vec<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub enum Request {
+    Announce(AnnounceRequestData),
+    Scrape(ScrapeRequestData),
 }
 
 #[derive(Serialize, Debug)]
@@ -62,6 +65,30 @@ impl Peer {
 }
 
 #[derive(Serialize, Debug)]
+pub struct TorrentInfo {
+    complete: isize,
+    incomplete: isize,
+    downloaded: isize,
+}
+
+impl TorrentInfo {
+    // no clue how to get download number for now.
+    // TODO: add state for torrents
+    pub fn new(complete: isize) -> Self {
+        TorrentInfo {
+            complete,
+            incomplete: 0,
+            downloaded: 114514,
+        }
+    }
+}
+
+#[derive(Serialize, Debug)]
 pub struct AnnounceResponseData {
     pub peers: Vec<Peer>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct ScrapeResponseData {
+    pub files: HashMap<String, TorrentInfo>,
 }

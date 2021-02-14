@@ -4,30 +4,39 @@ mod storage;
 mod util;
 
 use bendy::serde::{from_bytes, to_bytes};
-use data::AnnounceRequestData;
 use futures::prelude::*;
 use std::sync::Arc;
 use storage::redis::DB;
 use storage::Storage;
 use tokio::net::TcpListener;
-use tokio::prelude::*;
 use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
+use crate::data::Request;
 
 async fn tracker_loop(socket: tokio::net::TcpStream, db: std::sync::Arc<storage::redis::DB>) {
     let (read_half, write_half) = socket.into_split();
     let mut reader = FramedRead::new(read_half, LengthDelimitedCodec::new());
     let mut writer = FramedWrite::new(write_half, LengthDelimitedCodec::new());
     while let Ok(Some(msg)) = reader.try_next().await {
-        let a: AnnounceRequestData = match from_bytes(&msg) {
+        let a: Request = match from_bytes(&msg) {
             Ok(a) => a,
             _ => continue,
         };
         // println!("{:?}", a);
-        let response = db.announce(&a).await.unwrap();
-        if let Some(r) = response {
-            let bytes = to_bytes(&r).unwrap();
-            writer.send(bytes.into()).await.unwrap();
-        }
+
+        // Rust does support sub-typing and trait downcast may be unsound
+        // so forgive me for such dull code
+        match a {
+            Request::Announce(req) =>
+                if let Some(r) = db.announce(&req).await.unwrap() {
+                    let bytes = to_bytes(&r).unwrap();
+                    writer.send(bytes.into()).await.unwrap();
+                },
+            Request::Scrape(req) =>
+                if let Some(r) = db.scrape(&req).await.unwrap() {
+                    let bytes = to_bytes(&r).unwrap();
+                    writer.send(bytes.into()).await.unwrap();
+                }
+        };
     }
 }
 
@@ -48,8 +57,8 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("<================Rua PT is running================>");
     let db = Arc::new(DB::new(
-        "redis://:1234567890@127.0.0.1:1710/0",
-        "redis://:1234567890@127.0.0.1:1710/1",
+        "redis://:1234567890@127.0.0.1:6379/0",
+        "redis://:1234567890@127.0.0.1:6379/1",
     ));
     tokio::spawn(compaction_loop(db.clone()));
     let listener = TcpListener::bind("127.0.0.1:8081").await.unwrap();
