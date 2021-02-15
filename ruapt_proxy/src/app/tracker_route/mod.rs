@@ -1,6 +1,8 @@
 mod context;
 mod data;
 
+use std::io::Read;
+
 use actix_web::*;
 
 use bendy::serde::to_bytes;
@@ -19,18 +21,19 @@ async fn announce(
     web::Query(q): web::Query<data::AnnounceRequestData>,
     data: web::Data<context::Context>,
 ) -> impl Responder {
-    // TODO: error handler
+    //TODO: error handler
     let mut con = data.pool.get().await.unwrap();
     let (read_half, write_half) = con.split();
     let mut reader = FramedRead::new(read_half, LengthDelimitedCodec::new());
     let mut writer = FramedWrite::new(write_half, LengthDelimitedCodec::new());
-    // todo: convert the struct
+    // TODO: drop passkey(?), check valid(?), route to backend
     let bytes = to_bytes(&q).unwrap();
     writer.send(bytes.into()).await.unwrap();
-    if let Ok(Some(_msg)) = reader.try_next().await {
-        return "fuck me";
+    if let Ok(Some(msg)) = reader.try_next().await {
+        return msg;
     }
-    "fuck u"
+    // what should i return?
+    panic!("DAMN");
 }
 
 pub fn tracker_service() -> Scope {
