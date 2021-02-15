@@ -7,8 +7,6 @@ use std::collections::HashMap;
 pub struct AnnounceRequestData {
     pub info_hash: String,
     pub peer_id: String,
-    // is it better to use info hash directly?
-    // pub torrent_id: u64,
     pub ip: String,
     pub port: i32,
     #[serde(default)]
@@ -76,11 +74,10 @@ pub struct TorrentInfo {
 
 impl TorrentInfo {
     // no clue how to get download number for now.
-    // TODO: add state for torrents
-    pub fn new(complete: isize) -> Self {
+    pub fn new(complete: isize, incomplete: isize) -> Self {
         TorrentInfo {
             complete,
-            incomplete: 0,
+            incomplete,
             downloaded: 114514,
         }
     }

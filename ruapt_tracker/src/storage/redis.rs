@@ -85,14 +85,14 @@ impl Storage for DB {
         let mut con1 = self.get_torrent_con_with_delay().await?;
         // fuck borrow check
         // cannot reuse con1 because the cursor take the mut borrow
-        // TODO: maybe rewrite it with raw redis command
         let mut con2 = self.get_torrent_con_with_delay().await?;
         let mut cursor: AsyncIter<String> = con1.scan().await?;
         let mut p = Pipeline::with_capacity(10);
-        let t = get_timestamp() - 300;
+        // we assume that redis is fast enough
+        let now = get_timestamp();
         let mut cnt = 0;
         while let Some(key) = cursor.next_item().await {
-            p.cmd("ZREMRANGEBYSCORE").arg(key).arg(t).ignore();
+            p.zrembyscore(&key, now - 300, now);
             cnt += 1;
             if cnt % 10 == 0 {
                 p.execute_async(&mut con2).await?;
@@ -110,13 +110,13 @@ impl Storage for DB {
         let mut to_con = self.get_torrent_con_no_delay().await?;
         let t = get_timestamp();
         let mut files: HashMap<String, TorrentInfo> = HashMap::new();
-        for t_id in &data.info_hash {
-            let complete: isize = to_con.zcount(t_id, t, "+inf").await?;
-            // TODO: eliminating this clone
-            files.insert(t_id.clone(), TorrentInfo::new(complete));
+        for hash in &data.info_hash {
+            let total: isize = to_con.zcount(hash, t, "+inf").await?;
+            let hash_ext = format!("ext_{}", &hash);
+            let incomplete: isize = to_con.scard(&hash_ext).await?;
+            files.insert(hash.clone(), TorrentInfo::new(total - incomplete, incomplete));
         }
         Ok(Some(ScrapeResponseData{ files }))
-        // todo! {}
     }
 
     async fn announce(
@@ -126,35 +126,42 @@ impl Storage for DB {
         // do nothing, the compaction will remove it
         // in few minutes.
         let mut user_con = self.get_user_con_no_delay().await?;
-        let t_id = format!("{}", &data.info_hash);
+        let mut to_con = self.get_torrent_con_no_delay().await?;
+        let info_hash = format!("{}", &data.info_hash);
+        let info_hash_ext = format!("ext_{}", &data.info_hash);
         if let Some(Stopped) = data.action {
-            user_con.srem(&data.peer_id, &t_id).await?;
+            user_con.srem(&data.peer_id, &info_hash).await?;
             return Ok(None);
+        }
+        if let Some(Completed) = data.action {
+            to_con.srem(&info_hash_ext, &data.peer_id).await?;
         }
         // use t_id instead info_hash to decrease memory usage
         // actually, if it is worth using t_id is unknown
         // then get the return value
+        // ** A use of info_hash didn't lose so much performance **
+        // ** Also better for independence from backend BY BRETHLAND **
         let mut p = Pipeline::with_capacity(4);
-        p.sadd(&data.peer_id, &t_id);
+        p.sadd(&data.peer_id, &info_hash);
         p.expire(&data.peer_id, 300);
         p.execute_async(&mut user_con).await?;
         p.clear();
         let now = get_timestamp();
-        p.zadd(&t_id, data.encode_info(), now);
-        p.expire(&t_id, 300);
-        let mut to_con = self.get_torrent_con_no_delay().await?;
+        p.zadd(&info_hash, data.encode_info(), now);
+        p.sadd(&info_hash_ext, &data.peer_id);
+        p.expire(&info_hash, 300);
+        // should the extend hash be expired?
+        // p.expire(&info_hash_ext, 300);
         p.execute_async(&mut to_con).await?;
         // ZRANGEBYSCORE t_id now-300 +inf LIMIT 0 num_want
-        // dup here, maybe rewrite the convert?
         let peers: Vec<Peer> = match data.num_want {
             Some(num_want) => to_con
-                .zrangebyscore_limit(&t_id, now - 300, "+inf", 0, num_want)
+                .zrangebyscore_limit(&info_hash, now - 300, "+inf", 0, num_want)
                 .await?,
             None => to_con
-                .zrangebyscore(&t_id, now - 300, "+inf")
+                .zrangebyscore(&info_hash, now - 300, "+inf")
                 .await?,
         };
-        // todo! {}
         Ok(Some(AnnounceResponseData { peers }))
     }
 }

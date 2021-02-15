@@ -29,6 +29,7 @@ async fn tracker_loop(socket: tokio::net::TcpStream, db: std::sync::Arc<storage:
 
         // Rust does not support sub-typing and trait downcast may be unsound
         // so forgive me for such dull code
+        // TODO: use backend for dispatch
         // match a {
         //     Request::Announce(req) =>
         //         if let Some(r) = db.announce(&req).await.unwrap() {
@@ -60,6 +61,7 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 #[tokio::main(flavor = "multi_thread", worker_threads = 3)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("<================Rua PT is running================>");
+    // TODO: use config file
     let db = Arc::new(DB::new(
         "redis://:1234567890@127.0.0.1:6379/0",
         "redis://:1234567890@127.0.0.1:6379/1",
