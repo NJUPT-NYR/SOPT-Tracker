@@ -129,13 +129,15 @@ impl Storage for DB {
         let mut to_con = self.get_torrent_con_no_delay().await?;
         let info_hash = format!("{}", &data.info_hash);
         let info_hash_ext = format!("ext_{}", &data.info_hash);
-        if let Some(Stopped) = data.action {
-            user_con.srem(&data.peer_id, &info_hash).await?;
-            return Ok(None);
-        }
-        if let Some(Completed) = data.action {
-            to_con.srem(&info_hash_ext, &data.peer_id).await?;
-        }
+        match data.action {
+            Some(Completed) => to_con.srem(&info_hash_ext, &data.peer_id).await?,
+            Some(Stopped) => {
+                user_con.srem(&data.peer_id, &info_hash).await?;
+                return Ok(None);
+            },
+            Some(Started) => to_con.sadd(&info_hash_ext, &data.peer_id).await?,
+            None => {}
+        };
         // use t_id instead info_hash to decrease memory usage
         // actually, if it is worth using t_id is unknown
         // then get the return value
@@ -148,7 +150,6 @@ impl Storage for DB {
         p.clear();
         let now = get_timestamp();
         p.zadd(&info_hash, data.encode_info(), now);
-        p.sadd(&info_hash_ext, &data.peer_id);
         p.expire(&info_hash, 300);
         // should the extend hash be expired?
         // p.expire(&info_hash_ext, 300);
