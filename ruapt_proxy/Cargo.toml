@@ -16,3 +16,5 @@ bendy = { version = "^0.3", features = ["std", "serde"] }
 tokio-util = { version = "0.3.1", features = ["full"] }
 futures = "0.3"
 rand = "*"
+actix-web = "3"
+env_logger = "*"

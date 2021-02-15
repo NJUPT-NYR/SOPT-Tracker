@@ -1,5 +1,7 @@
 mod data;
 mod tcp_pool;
+mod app;
+
 use crate::data::*;
 use bendy::serde::to_bytes;
 use futures::prelude::*;
@@ -73,7 +75,7 @@ impl Context {
 }
 
 #[tokio::main]
-async fn main() {
+async fn bench_main() {
     let m = Manager::new("127.0.0.1:8081").unwrap();
     let pool = Arc::new(Pool::new(m, 1000));
     // let con = pool.get().await?;
@@ -86,4 +88,8 @@ async fn main() {
     for han in h {
         han.await;
     }
+}
+
+fn main() {
+    app::start_server();
 }
