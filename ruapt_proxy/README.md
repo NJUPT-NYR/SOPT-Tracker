@@ -19,6 +19,11 @@
         - 启动时全量初始化，然后热更新。
         - 允许错误率 10%？可能并不会有太多误伤情况。
 
+一个announce请求模板
+```log
+[2021-02-16T14:02:13Z INFO  actix_web::middleware::logger] 192.168.31.97:6293 "GET /tracker/announce?info_hash=%08Y%df%97%fb4%60%fa%e6%d4%d9%14d8%b4Moh%d4x&peer_id=-qB4230-3!k*_X5pFXMt&port=1&uploaded=0&downloaded=0&left=7112249065&corrupt=0&key=C22A8AAA&event=started&numwant=200&compact=1&no_peer_id=1&supportcrypto=1&redundant=0 HTTP/1.1" 400 43 "-" "qBittorrent/4.2.3" 0.000520
+```
+
 - 对于backend请求
     - 依旧走http直接转发，外部来看应该是透明的
 
