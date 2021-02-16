@@ -1,4 +1,6 @@
 mod tracker_route;
+mod config;
+
 use tracker_route::*;
 
 use actix_web::*;
