@@ -3,7 +3,7 @@ mod error;
 mod storage;
 mod util;
 
-use crate::data::{AnnounceRequestData, Request};
+use crate::data::AnnounceRequestData;
 use data::AnnouncePacket;
 use futures::prelude::*;
 use serde_bencode::{de, ser};
@@ -15,7 +15,6 @@ use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
 
 async fn tracker_loop(socket: tokio::net::TcpStream, db: std::sync::Arc<storage::redis::DB>) {
     let (mut read_half, write_half) = socket.into_split();
-    // let mut reader = FramedRead::new(read_half, LengthDelimitedCodec::new());
     // let mut writer = FramedWrite::new(write_half, LengthDelimitedCodec::new());
     let mut buffer: [u8; 80] = [0; 80];
     read_half.read_exact(&mut buffer).await;

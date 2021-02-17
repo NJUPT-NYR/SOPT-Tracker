@@ -2,14 +2,12 @@ use crate::data::*;
 use crate::error::*;
 use crate::storage::Storage;
 use crate::util::get_timestamp;
-use std::collections::HashMap;
 use async_trait::async_trait;
 use deadpool::managed;
 use deadpool_redis::{
     redis::{AsyncCommands, AsyncIter, ErrorKind, FromRedisValue, RedisError, RedisResult, Value},
     Config, ConnectionWrapper, Pipeline, PoolError,
 };
-
 type Connection = managed::Object<ConnectionWrapper, RedisError>;
 type Pool = managed::Pool<ConnectionWrapper, RedisError>;
 
@@ -103,10 +101,8 @@ impl Storage for DB {
         Ok(())
     }
 
-    async fn scrape(
-        &self,
-        data: &ScrapeRequestData,
-    ) -> TrackerResult<Option<ScrapeResponseData>> {
+    #[cfg(scrape = "on")]
+    async fn scrape(&self, data: &ScrapeRequestData) -> TrackerResult<Option<ScrapeResponseData>> {
         let mut to_con = self.get_torrent_con_no_delay().await?;
         let t = get_timestamp();
         let mut files: HashMap<String, TorrentInfo> = HashMap::new();
@@ -114,9 +110,12 @@ impl Storage for DB {
             let total: isize = to_con.zcount(hash, t, "+inf").await?;
             let hash_ext = format!("ext_{}", &hash);
             let incomplete: isize = to_con.scard(&hash_ext).await?;
-            files.insert(hash.clone(), TorrentInfo::new(total - incomplete, incomplete));
+            files.insert(
+                hash.clone(),
+                TorrentInfo::new(total - incomplete, incomplete),
+            );
         }
-        Ok(Some(ScrapeResponseData{ files }))
+        Ok(Some(ScrapeResponseData { files }))
     }
 
     async fn announce(
@@ -129,12 +128,17 @@ impl Storage for DB {
         let mut to_con = self.get_torrent_con_no_delay().await?;
         let info_hash = format!("{}", &data.info_hash);
         let info_hash_ext = format!("ext_{}", &data.info_hash);
+
         if let Some(Stopped) = data.action {
-            user_con.srem(&data.peer_id, &info_hash).await?;
+            if cfg!(scrape = "on") {
+                user_con.srem(&data.peer_id, &info_hash).await?;
+            }
             return Ok(None);
         }
-        if let Some(Completed) = data.action {
-            to_con.srem(&info_hash_ext, &data.peer_id).await?;
+        if cfg!(scrape = "on") {
+            if let Some(Completed) = data.action {
+                to_con.srem(&info_hash_ext, &data.peer_id).await?;
+            }
         }
         // use t_id instead info_hash to decrease memory usage
         // actually, if it is worth using t_id is unknown
@@ -142,25 +146,29 @@ impl Storage for DB {
         // ** A use of info_hash didn't lose so much performance **
         // ** Also better for independence from backend BY BRETHLAND **
         let mut p = Pipeline::with_capacity(4);
-        p.sadd(&data.peer_id, &info_hash);
+        if cfg!(scrape = "on") {
+            p.sadd(&data.peer_id, &info_hash);
+        }
         p.expire(&data.peer_id, 300);
         p.execute_async(&mut user_con).await?;
         p.clear();
         let now = get_timestamp();
         p.zadd(&info_hash, data.encode_info(), now);
-        p.sadd(&info_hash_ext, &data.peer_id);
+        if cfg!(scrape = "on") {
+            p.sadd(&info_hash_ext, &data.peer_id);
+        }
         p.expire(&info_hash, 300);
         // should the extend hash be expired?
         // p.expire(&info_hash_ext, 300);
         p.execute_async(&mut to_con).await?;
         // ZRANGEBYSCORE t_id now-300 +inf LIMIT 0 num_want
         let peers: Vec<Peer> = match data.num_want {
-            Some(num_want) => to_con
-                .zrangebyscore_limit(&info_hash, now - 300, "+inf", 0, num_want)
-                .await?,
-            None => to_con
-                .zrangebyscore(&info_hash, now - 300, "+inf")
-                .await?,
+            Some(num_want) => {
+                to_con
+                    .zrangebyscore_limit(&info_hash, now - 300, "+inf", 0, num_want)
+                    .await?
+            }
+            None => to_con.zrangebyscore(&info_hash, now - 300, "+inf").await?,
         };
         Ok(Some(AnnounceResponseData { peers }))
     }

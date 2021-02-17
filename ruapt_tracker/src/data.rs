@@ -34,7 +34,7 @@ impl AnnouncePacket {
         unsafe { transmute_copy(buf) }
     }
     pub fn as_bytes(&self) -> &[u8; 80] {
-        unsafe { std::mem::transmute(&self) }
+        unsafe { std::mem::transmute(self) }
     }
     pub fn as_mut_bytes(&mut self) -> &mut [u8; 80] {
         unsafe { std::mem::transmute(self) }
@@ -53,17 +53,10 @@ pub enum Action {
     Started,
     Stopped,
 }
-
+#[cfg(scrape="on")]
 #[derive(Deserialize, Debug)]
 pub struct ScrapeRequestData {
     pub info_hash: Vec<String>,
-}
-
-#[serde(untagged)]
-#[derive(Deserialize, Debug)]
-pub enum Request {
-    Announce(AnnounceRequestData),
-    Scrape(ScrapeRequestData),
 }
 
 #[derive(Serialize, Debug)]
@@ -91,6 +84,7 @@ impl Peer {
     }
 }
 
+#[cfg(scrape="on")]
 #[derive(Serialize, Debug)]
 pub struct TorrentInfo {
     complete: isize,
@@ -98,6 +92,7 @@ pub struct TorrentInfo {
     downloaded: isize,
 }
 
+#[cfg(scrape="on")]
 impl TorrentInfo {
     // no clue how to get download number for now.
     pub fn new(complete: isize, incomplete: isize) -> Self {
@@ -113,7 +108,7 @@ impl TorrentInfo {
 pub struct AnnounceResponseData {
     pub peers: Vec<Peer>,
 }
-
+#[cfg(scrape="on")]
 #[derive(Serialize, Debug)]
 pub struct ScrapeResponseData {
     pub files: HashMap<String, TorrentInfo>,

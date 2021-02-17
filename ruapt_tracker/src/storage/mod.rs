@@ -8,10 +8,8 @@ use async_trait::async_trait;
 #[async_trait]
 pub trait Storage {
     async fn compaction(&self) -> TrackerResult<()>;
-    async fn scrape(
-        &self,
-        data: &ScrapeRequestData,
-    ) -> TrackerResult<Option<ScrapeResponseData>>;
+    #[cfg(scrape = "on")]
+    async fn scrape(&self, data: &ScrapeRequestData) -> TrackerResult<Option<ScrapeResponseData>>;
     async fn announce(
         &self,
         data: &AnnounceRequestData,
