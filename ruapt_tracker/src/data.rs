@@ -1,7 +1,8 @@
 use crate::error::*;
 use serde::{Deserialize, Serialize};
+use std::net::{Ipv4Addr, Ipv6Addr};
+use std::{collections::HashMap, mem::transmute_copy};
 pub use Action::*;
-use std::collections::HashMap;
 
 #[derive(Deserialize, Debug)]
 pub struct AnnounceRequestData {
@@ -13,6 +14,31 @@ pub struct AnnounceRequestData {
     pub action: Option<Action>,
     #[serde(default)]
     pub num_want: Option<isize>,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct AnnouncePacket {
+    version: u8,
+    event: u8,
+    numwant: u16,
+    info_hash: [u8; 20],
+    peer_id: [u8; 20],
+    v4ip: Ipv4Addr,
+    v6ip: Ipv6Addr,
+    port: u16,
+    draft: [u8; 14],
+}
+impl AnnouncePacket {
+    pub fn init_from_buffer(buf: &[u8; 80]) -> Self {
+        unsafe { transmute_copy(buf) }
+    }
+    pub fn as_bytes(&self) -> &[u8; 80] {
+        unsafe { std::mem::transmute(&self) }
+    }
+    pub fn as_mut_bytes(&mut self) -> &mut [u8; 80] {
+        unsafe { std::mem::transmute(self) }
+    }
 }
 
 impl AnnounceRequestData {

@@ -38,3 +38,7 @@
 目前几个想法  
 - 全部放global里面，要方便维护就写在服务对应目录然后用include导入
 - 用反射派发出去然后上个serdejson之类的
+
+## 目前的问题
+1. info_hash是urlencode的binary，actix解query用的serde_urlencode，会把不能解成utf-8的换成�（不是乱码，value是65533），目前是专门给info_hash重写了parse，后面看情况fork下来重新改一下
+2. peer_id，经测试qbittorrent这边传的和协议不太一样，是22个字节，目前是截掉了，怎么处理不好决定
