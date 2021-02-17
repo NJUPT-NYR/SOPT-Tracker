@@ -14,7 +14,7 @@ pub async fn start_server() -> std::io::Result<()> {
             .wrap(middleware::Logger::default())
             .service(tracker_service())
     })
-    .bind("127.0.0.1:8080")?
+    .bind("192.168.31.222:8080")?
     .run()
     .await
 }

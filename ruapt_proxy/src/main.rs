@@ -5,7 +5,7 @@ mod app;
 use crate::data::*;
 use bendy::serde::to_bytes;
 use futures::prelude::*;
-use std::sync::Arc;
+use std::{mem::size_of, sync::Arc};
 use tcp_pool::*;
 use tokio::prelude::*;
 use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};

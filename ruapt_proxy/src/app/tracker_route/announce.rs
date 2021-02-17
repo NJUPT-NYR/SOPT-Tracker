@@ -37,15 +37,11 @@ async fn announce(
     let (read_half, mut write_half) = con.split();
     // write_half.write(p).await.unwrap();
     let mut reader = FramedRead::new(read_half, LengthDelimitedCodec::new());
-    // let mut writer = FramedWrite::new(write_half, LengthDelimitedCodec::new());
-    // let bytes = to_bytes(&q).unwrap();
-    // writer.send(bytes.into()).await.unwrap();
     println!("{:#?}", p.as_bytes());
     write_half.write_all(p.as_bytes()).await.unwrap();
-    return "FUCK U";
-    // if let Ok(Some(msg)) = reader.try_next().await {
-    //     return msg;
-    // }
+    if let Ok(Some(msg)) = reader.try_next().await {
+        return msg;
+    }
     // what should i return?
     panic!("DAMN");
 }

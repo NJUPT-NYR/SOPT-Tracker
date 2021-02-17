@@ -1759,6 +1759,7 @@ dependencies = [
  "futures 0.3.8",
  "rand",
  "serde",
+ "serde_bytes",
  "tokio 0.2.23",
  "tokio-util 0.3.1",
 ]
@@ -1768,6 +1769,7 @@ name = "ruapt_tracker"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "base64",
  "bendy",
  "deadpool",
  "deadpool-redis",

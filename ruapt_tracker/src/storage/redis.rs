@@ -118,25 +118,24 @@ impl Storage for DB {
         Ok(Some(ScrapeResponseData { files }))
     }
 
-    async fn announce(
-        &self,
-        data: &AnnounceRequestData,
-    ) -> TrackerResult<Option<AnnounceResponseData>> {
+    async fn announce(&self, data: &AnnouncePacket) -> TrackerResult<Option<AnnounceResponseData>> {
         // do nothing, the compaction will remove it
         // in few minutes.
-        let mut user_con = self.get_user_con_no_delay().await?;
+        let mut user_con = self.get_user_con_no_delay().await.unwrap();
+        println!("OKay?1");
         let mut to_con = self.get_torrent_con_no_delay().await?;
-        let info_hash = format!("{}", &data.info_hash);
-        let info_hash_ext = format!("ext_{}", &data.info_hash);
+        println!("OKay?2");
+        let info_hash = base64::encode(data.info_hash);
+        let info_hash_ext = format!("ext_{}", info_hash);
 
-        if let Some(Stopped) = data.action {
+        if Event::stopped as u8 == data.event {
             if cfg!(scrape = "on") {
                 user_con.srem(&data.peer_id, &info_hash).await?;
             }
             return Ok(None);
         }
         if cfg!(scrape = "on") {
-            if let Some(Completed) = data.action {
+            if Event::completed as u8 == data.event {
                 to_con.srem(&info_hash_ext, &data.peer_id).await?;
             }
         }
@@ -162,14 +161,10 @@ impl Storage for DB {
         // p.expire(&info_hash_ext, 300);
         p.execute_async(&mut to_con).await?;
         // ZRANGEBYSCORE t_id now-300 +inf LIMIT 0 num_want
-        let peers: Vec<Peer> = match data.num_want {
-            Some(num_want) => {
-                to_con
-                    .zrangebyscore_limit(&info_hash, now - 300, "+inf", 0, num_want)
-                    .await?
-            }
-            None => to_con.zrangebyscore(&info_hash, now - 300, "+inf").await?,
-        };
+        let peers: Vec<Peer> = to_con
+            .zrangebyscore_limit(&info_hash, now - 300, "+inf", 0, data.numwant as isize)
+            .await?;
+
         Ok(Some(AnnounceResponseData { peers }))
     }
 }

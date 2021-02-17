@@ -12,6 +12,6 @@ pub trait Storage {
     async fn scrape(&self, data: &ScrapeRequestData) -> TrackerResult<Option<ScrapeResponseData>>;
     async fn announce(
         &self,
-        data: &AnnounceRequestData,
+        data: &AnnouncePacket,
     ) -> TrackerResult<Option<AnnounceResponseData>>;
 }
