@@ -16,13 +16,26 @@ pub struct AnnouncePacket {
     port: u16,
     draft: [u8; 14],
 }
+
 impl AnnouncePacket {
+    pub fn new() -> Self {
+        AnnouncePacket {
+            version: 0,
+            event: 0,
+            numwant: 0,
+            info_hash: [0; 20],
+            peer_id: [0; 20],
+            v4ip: Ipv4Addr::new(0, 0, 0, 0),
+            v6ip: Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
+            port: 0,
+            draft: [0; 14],
+        }
+    }
+
     pub fn init_from_buffer(buf: &[u8; 80]) -> Self {
         unsafe { transmute_copy(buf) }
     }
-    pub fn as_bytes(&self) -> &[u8; 80] {
-        unsafe { std::mem::transmute(self) }
-    }
+    
     pub fn as_mut_bytes(&mut self) -> &mut [u8; 80] {
         unsafe { std::mem::transmute(self) }
     }

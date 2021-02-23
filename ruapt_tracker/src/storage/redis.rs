@@ -121,10 +121,8 @@ impl Storage for DB {
     async fn announce(&self, data: &AnnouncePacket) -> TrackerResult<Option<AnnounceResponseData>> {
         // do nothing, the compaction will remove it
         // in few minutes.
-        let mut user_con = self.get_user_con_no_delay().await.unwrap();
-        println!("OKay?1");
+        let mut user_con = self.get_user_con_no_delay().await?;
         let mut to_con = self.get_torrent_con_no_delay().await?;
-        println!("OKay?2");
         let info_hash = base64::encode(data.info_hash);
         let info_hash_ext = format!("ext_{}", info_hash);
 

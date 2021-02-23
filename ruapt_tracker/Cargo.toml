@@ -17,5 +17,6 @@ serde = "*"
 bendy = { version = "^0.3", features = ["std", "serde"] }
 serde_bencode = "^0.2.3"
 futures = "0.3"
+dotenv = "0.15.0"
 jemallocator = "0.3.2"
 base64 = "0.13.0"
