@@ -3,10 +3,9 @@ mod error;
 mod storage;
 mod util;
 
+use bendy::encoding::ToBencode;
 use data::AnnouncePacket;
-use env::var;
 use futures::prelude::*;
-use serde_bencode::{de, ser};
 use std::{borrow::BorrowMut, io::Read, mem::MaybeUninit, sync::Arc};
 use storage::redis::DB;
 use storage::Storage;
@@ -28,11 +27,10 @@ async fn tracker_loop(socket: tokio::net::TcpStream, db: std::sync::Arc<storage:
         match db.announce(&p).await {
             Ok(None) => {
                 //?
-                let bytes = ser::to_bytes(&Option::<()>::None).unwrap();
-                writer.send(bytes.into()).await.unwrap();
+                writer.send("".into()).await.unwrap();
             }
             Ok(Some(r)) => {
-                let bytes = ser::to_bytes(&r).unwrap();
+                let bytes = r.to_bencode().unwrap();
                 writer.send(bytes.into()).await.unwrap();
             }
             Err(err) => {
@@ -75,9 +73,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
     tokio::spawn(compaction_loop(db.clone()));
-    let listener = TcpListener::bind(env::var("SERVER_ADDR")?.as_str())
+    let server_addr = env::var("SERVER_ADDR")?;
+    let listener = TcpListener::bind(&server_addr)
         .await
-        .unwrap();
+        .expect(format!("Bind to {} failed!", &server_addr).as_str());
     println!("<================Rua PT is Full Started================>");
     loop {
         let (socket, _) = listener.accept().await?;

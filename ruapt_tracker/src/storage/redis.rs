@@ -150,7 +150,7 @@ impl Storage for DB {
         p.execute_async(&mut user_con).await?;
         p.clear();
         let now = get_timestamp();
-        p.zadd(&info_hash, data.encode_info(), now);
+        p.zadd(&info_hash, &data.encode_info(), now);
         if cfg!(scrape = "on") {
             p.sadd(&info_hash_ext, &data.peer_id);
         }
@@ -163,6 +163,6 @@ impl Storage for DB {
             .zrangebyscore_limit(&info_hash, now - 300, "+inf", 0, data.numwant as isize)
             .await?;
 
-        Ok(Some(AnnounceResponseData { peers }))
+        Ok(Some(AnnounceResponseData::new(peers)))
     }
 }

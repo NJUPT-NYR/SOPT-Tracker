@@ -33,3 +33,10 @@ Byte/     0       |       1       |       2       |       3       |
   +---------------+---------------+---------------+---------------+
 Total 80 bytes(Version 1)
 ```
+
+# redis存储
+现在的格式：`peer_id`@`ipv4`@`ipv6`@`port`  
+因为走了[压缩格式](https://www.bittorrent.org/beps/bep_0023.html)，目前看来torrent不存peer_id也可以。  
+另外是否要将可读的`ipv4`@`ipv6`@`port`转为不可读的binany格式？如果转了可以确凿省下很多内存。  
+**转了**  
+后面补充新的运维工具好了
