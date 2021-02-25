@@ -19,3 +19,7 @@ rand = "*"
 actix-web = "3"
 env_logger = "*"
 serde_bytes = "0.11"
+
+# for serde_url
+itoa = "0.4"
+ryu = "1"
