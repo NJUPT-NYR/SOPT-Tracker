@@ -1,7 +1,7 @@
 use crate::error::*;
 use bendy::encoding::{AsString, Error, SingleItemEncoder, ToBencode};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, mem::transmute_copy};
+use std::mem::transmute_copy;
 use std::{
     convert::TryInto,
     net::{Ipv4Addr, Ipv6Addr},
@@ -36,6 +36,7 @@ impl AnnouncePacket {
         }
     }
 
+    #[allow(dead_code)]
     pub fn init_from_buffer(buf: &[u8; 80]) -> Self {
         unsafe { transmute_copy(buf) }
     }
@@ -60,9 +61,9 @@ impl AnnouncePacket {
 
 #[derive(Deserialize, Serialize, Debug, Copy, Clone)]
 pub enum Event {
-    started = 0,
-    completed = 1,
-    stopped = 2,
+    Started = 0,
+    Completed = 1,
+    Stopped = 2,
 }
 
 #[cfg(scrape = "on")]
@@ -163,7 +164,7 @@ impl ToBencode for AnnounceResponseData {
 
     fn encode(&self, encoder: SingleItemEncoder) -> Result<(), Error> {
         encoder.emit_dict(|mut e| {
-            e.emit_pair(b"interval", 3600)?;
+            e.emit_pair(b"interval", 2700)?;
             e.emit_pair(b"peers", &AsString(&self.get_v4_peers()))?;
             e.emit_pair(b"peers6", &AsString(&self.get_v6_peers()))?;
             Ok(())

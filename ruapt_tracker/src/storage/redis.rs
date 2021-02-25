@@ -126,14 +126,14 @@ impl Storage for DB {
         let info_hash = base64::encode(data.info_hash);
         let info_hash_ext = format!("ext_{}", info_hash);
 
-        if Event::stopped as u8 == data.event {
+        if Event::Stopped as u8 == data.event {
             if cfg!(scrape = "on") {
                 user_con.srem(&data.peer_id, &info_hash).await?;
             }
             return Ok(None);
         }
         if cfg!(scrape = "on") {
-            if Event::completed as u8 == data.event {
+            if Event::Completed as u8 == data.event {
                 to_con.srem(&info_hash_ext, &data.peer_id).await?;
             }
         }
