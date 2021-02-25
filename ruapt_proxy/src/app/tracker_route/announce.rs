@@ -1,17 +1,11 @@
-use std::io::Read;
-
 use actix_web::*;
 use data::AnnouncePacket;
-use dev::MessageBody;
 use io::AsyncWriteExt;
-use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
 
 use crate::app::tracker_route::*;
-use bendy::serde::to_bytes;
 use futures::prelude::*;
 use tokio::prelude::*;
-use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
+use tokio_util::codec::{FramedRead, LengthDelimitedCodec};
 
 #[get("/announce")]
 async fn announce(
