@@ -40,3 +40,14 @@ Total 80 bytes(Version 1)
 另外是否要将可读的`ipv4`@`ipv6`@`port`转为不可读的binany格式？如果转了可以确凿省下很多内存。  
 **转了**  
 后面补充新的运维工具好了
+
+# 需求
+1. 种子列表显示当前做种人数
+  - redis zset（网页显示info_hash->\[passkey\]，passkey->uid，两次io)
+  - DB
+2. 用户列表显示完成种子
+  - redis set（丢数据，两次IO）
+  - DB
+3. 用户列表显示当前下载
+  - redis zset（网页显示passkey->\[info_hash\]，info_hash->tid，两次io)
+  - DB
