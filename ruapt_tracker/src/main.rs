@@ -31,7 +31,7 @@ async fn tracker_loop(socket: tokio::net::TcpStream, db: std::sync::Arc<storage:
                 Ok(Some(r)) => match r.to_bencode() {
                     Ok(v) => Bytes::from(v),
                     Err(err) => {
-                        println!("{}", err);
+                        println!("{:?}", err);
                         Bytes::from_static(error_response)
                     }
                 },

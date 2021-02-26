@@ -4,12 +4,10 @@ use async_trait::async_trait;
 use std::io;
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
+
 pub type Pool = deadpool::managed::Pool<ConnectionWrapper, io::Error>;
-
 pub type PoolError = deadpool::managed::PoolError<io::Error>;
-
 pub type Connection = deadpool::managed::Object<ConnectionWrapper, io::Error>;
-
 type RecycleResult = deadpool::managed::RecycleResult<io::Error>;
 
 pub struct ConnectionWrapper {

@@ -127,15 +127,11 @@ impl Storage for DB {
         let info_hash_ext = format!("ext_{}", info_hash);
 
         if Event::Stopped as u8 == data.event {
-            if cfg!(scrape = "on") {
-                user_con.srem(&data.peer_id, &info_hash).await?;
-            }
+            user_con.srem(&data.passkey, &info_hash).await?;
             return Ok(None);
         }
-        if cfg!(scrape = "on") {
-            if Event::Completed as u8 == data.event {
-                to_con.srem(&info_hash_ext, &data.peer_id).await?;
-            }
+        if Event::Completed as u8 == data.event {
+            to_con.srem(&info_hash_ext, &data.passkey).await?;
         }
         // use t_id instead info_hash to decrease memory usage
         // actually, if it is worth using t_id is unknown
@@ -143,20 +139,14 @@ impl Storage for DB {
         // ** A use of info_hash didn't lose so much performance **
         // ** Also better for independence from backend BY BRETHLAND **
         let mut p = Pipeline::with_capacity(4);
-        if cfg!(scrape = "on") {
-            p.sadd(&data.peer_id, &info_hash);
-        }
-        p.expire(&data.peer_id, 300);
+        p.sadd(&data.passkey, &info_hash);
+        p.expire(&data.passkey, 300);
         p.execute_async(&mut user_con).await?;
         p.clear();
         let now = get_timestamp();
         p.zadd(&info_hash, &data.encode_info(), now);
-        if cfg!(scrape = "on") {
-            p.sadd(&info_hash_ext, &data.peer_id);
-        }
+        p.sadd(&info_hash_ext, &data.passkey);
         p.expire(&info_hash, 300);
-        // should the extend hash be expired?
-        // p.expire(&info_hash_ext, 300);
         p.execute_async(&mut to_con).await?;
         // ZRANGEBYSCORE t_id now-300 +inf LIMIT 0 num_want
         let peers: Vec<Peer> = to_con

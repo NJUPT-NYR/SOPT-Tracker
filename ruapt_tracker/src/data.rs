@@ -14,11 +14,11 @@ pub struct AnnouncePacket {
     pub event: u8,
     pub numwant: u16,
     pub info_hash: [u8; 20],
-    pub peer_id: [u8; 20],
+    pub passkey: [u8; 32],
     v4ip: Ipv4Addr,
     v6ip: Ipv6Addr,
     port: u16,
-    draft: [u8; 14],
+    draft: [u8; 2],
 }
 
 impl AnnouncePacket {
@@ -28,11 +28,11 @@ impl AnnouncePacket {
             event: 0,
             numwant: 0,
             info_hash: [0; 20],
-            peer_id: [0; 20],
+            passkey: [0; 32],
             v4ip: Ipv4Addr::UNSPECIFIED,
             v6ip: Ipv6Addr::UNSPECIFIED,
             port: 0,
-            draft: [0; 14],
+            draft: [0; 2],
         }
     }
 
@@ -69,7 +69,7 @@ pub enum Event {
 #[cfg(scrape = "on")]
 #[derive(Deserialize, Debug)]
 pub struct ScrapeRequestData {
-    pub info_hash: Vec<String>,
+    pub info_hash: Vec<Vec<u8>>,
 }
 
 #[derive(Serialize, Debug)]

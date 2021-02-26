@@ -1,17 +1,16 @@
 use actix_web::*;
-use data::AnnouncePacket;
 use io::AsyncWriteExt;
-
-use crate::app::tracker_route::*;
 use futures::prelude::*;
 use tokio::prelude::*;
 use tokio_util::codec::{FramedRead, LengthDelimitedCodec};
+use super::data::{AnnouncePacket, AnnounceRequestData};
+use super::context::Context;
 
 #[get("/announce")]
-async fn announce(
-    web::Query(mut q): web::Query<data::AnnounceRequestData>,
+pub async fn announce(
+    web::Query(mut q): web::Query<AnnounceRequestData>,
     req: HttpRequest,
-    data: web::Data<context::Context>,
+    data: web::Data<Context>,
 ) -> impl Responder {
     // refine
     let query = req.uri().query().unwrap();
@@ -29,15 +28,13 @@ async fn announce(
     //TODO: error handler
     let mut con = data.pool.get().await.unwrap();
     let (read_half, mut write_half) = con.split();
-    // write_half.write(p).await.unwrap();
     let mut reader = FramedRead::new(read_half, LengthDelimitedCodec::new());
     println!("{:#?}", p.as_bytes());
     write_half.write_all(p.as_bytes()).await.unwrap();
     if let Ok(Some(msg)) = reader.try_next().await {
         return msg;
     }
-    // what should i return?
-    panic!("DAMN");
+    panic!("TODO")
 }
 
 fn decode_hex(x: u8) -> u8 {

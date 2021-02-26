@@ -46,7 +46,7 @@ impl AnnounceRequestData {
             }
         }
         if true_v4.is_none() && true_v6.is_none() {
-            panic!("TODO");
+            panic!("unable to detect connection address");
         }
         self.ipv4 = true_v4;
         self.ipv6 = true_v6;
@@ -60,11 +60,11 @@ pub struct AnnouncePacket {
     event: u8,
     numwant: u16,
     info_hash: [u8; 20],
-    peer_id: [u8; 20],
+    pass_key: [u8; 32],
     v4ip: Ipv4Addr,
     v6ip: Ipv6Addr,
     port: u16,
-    draft: [u8; 14],
+    draft: [u8; 2],
 }
 
 impl AnnouncePacket {
@@ -74,14 +74,15 @@ impl AnnouncePacket {
             event: req.event as u8,
             numwant: req.numwant,
             info_hash: [0; 20],
-            peer_id: [0; 20],
-            v4ip: req.ipv4.unwrap_or(Ipv4Addr::new(0, 0, 0, 0)),
-            v6ip: req.ipv6.unwrap_or(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0)),
+            pass_key: [0; 32],
+            // must fix ip before from
+            v4ip: req.ipv4.unwrap(),
+            v6ip: req.ipv6.unwrap(),
             port: req.port,
-            draft: [0; 14],
+            draft: [0; 2],
         };
         p.info_hash.copy_from_slice(req.info_hash.as_slice());
-        p.peer_id.copy_from_slice(&req.peer_id.as_bytes()[..20]);
+        p.pass_key.copy_from_slice(&req.passkey.as_bytes()[..32]);
         p
     }
 
@@ -92,13 +93,13 @@ impl AnnouncePacket {
 
 #[derive(Deserialize, Serialize, Debug, Copy, Clone)]
 pub enum Event {
-    started = 0,
-    completed = 1,
-    stopped = 2,
+    Started = 0,
+    Completed = 1,
+    Stopped = 2,
 }
 
 impl Default for Event {
     fn default() -> Self {
-        Event::started
+        Event::Started
     }
 }
