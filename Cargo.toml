@@ -1,2 +1,2 @@
 [workspace]
-members = ["ruapt_tracker", "ruapt_proxy"]
+members = ["ruapt_tracker", "ruapt_proxy", "redis_tracker"]
