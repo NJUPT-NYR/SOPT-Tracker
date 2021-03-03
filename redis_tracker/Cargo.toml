@@ -11,6 +11,6 @@ name = "retracker"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-redis-module = "0.12.0"
+redis-module = { git = "https://github.com/Hydrogen5/redismodule-rs" }
 indexmap = "1.6.1"
 rand = "0.8.3"

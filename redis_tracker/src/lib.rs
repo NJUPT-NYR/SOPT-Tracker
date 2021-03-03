@@ -126,11 +126,11 @@ impl SeederMap {
                 buf_peer6.extend_from_slice(&v6.port().to_be_bytes());
             };
         }
-        let s_peer = unsafe { String::from_utf8_unchecked(buf_peer) };
-        let s_peer6 = unsafe { String::from_utf8_unchecked(buf_peer6) };
+        // let s_peer = unsafe { String::from_utf8_unchecked(buf_peer) };
+        // let s_peer6 = unsafe { String::from_utf8_unchecked(buf_peer6) };
         RedisValue::Array(vec![
-            RedisValue::SimpleString(s_peer),
-            RedisValue::SimpleString(s_peer6),
+            RedisValue::Buffer(buf_peer),
+            RedisValue::Buffer(buf_peer6),
         ])
     }
 }
