@@ -5,10 +5,10 @@ use indexmap::IndexMap;
 use rand::Rng;
 use redis_module::native_types::RedisType;
 use redis_module::{raw, Context, RedisError, RedisResult, RedisValue};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{
     convert::TryFrom,
-    net::{SocketAddrV4, SocketAddrV6},
+    net::{Ipv4Addr, Ipv6Addr},
 };
 
 use std::os::raw::c_void;
@@ -28,8 +28,9 @@ struct AnnounceRequest {
 }
 
 struct PeerInfo {
-    ipv4: Option<SocketAddrV4>,
-    ipv6: Option<SocketAddrV6>,
+    ipv4: Option<Ipv4Addr>,
+    ipv6: Option<Ipv6Addr>,
+    port: u16,
 }
 
 struct SeederMap {
@@ -118,12 +119,12 @@ impl SeederMap {
             .take(num_want);
         while let Some((_, p)) = iter.next() {
             if let Some(ref v4) = p.ipv4 {
-                buf_peer.extend_from_slice(&v4.ip().octets());
-                buf_peer.extend_from_slice(&v4.port().to_be_bytes());
+                buf_peer.extend_from_slice(&v4.octets());
+                buf_peer.extend_from_slice(&p.port.to_be_bytes());
             };
             if let Some(v6) = p.ipv6 {
-                buf_peer6.extend_from_slice(&v6.ip().octets());
-                buf_peer6.extend_from_slice(&v6.port().to_be_bytes());
+                buf_peer6.extend_from_slice(&v6.octets());
+                buf_peer6.extend_from_slice(&p.port.to_be_bytes());
             };
         }
         // let s_peer = unsafe { String::from_utf8_unchecked(buf_peer) };
@@ -138,24 +139,25 @@ impl SeederMap {
 impl TryFrom<Vec<String>> for AnnounceRequest {
     type Error = RedisError;
     fn try_from(mut args: Vec<String>) -> Result<AnnounceRequest, RedisError> {
-        if args.len() != 6 {
+        if args.len() < 6 {
             return Err(RedisError::Str("FUCK U"));
         }
-        let port: u16 = args.pop().unwrap().parse()?;
-        let ipv6 = match args.pop().unwrap().as_str() {
+        let mut iter = args.into_iter().skip(1);
+        let passkey = iter.next().unwrap();
+        let info_hash = iter.next().unwrap();
+        let ipv4 = match iter.next().unwrap().as_str() {
             "none" => None,
-            s @ _ => Some(SocketAddrV6::new(s.parse()?, port, 0, 0)),
+            s @ _ => Some(s.parse()?),
         };
-        let ipv4 = match args.pop().unwrap().as_str() {
+        let ipv6 = match iter.next().unwrap().as_str() {
             "none" => None,
-            s @ _ => Some(SocketAddrV4::new(s.parse()?, port)),
+            s @ _ => Some(s.parse()?),
         };
-        let passkey = args.pop().unwrap();
-        let info_hash = args.pop().unwrap();
         if info_hash.len() != 20 {
             return Err(RedisError::Str("FUCK U"));
         }
-        let peer = PeerInfo { ipv4, ipv6 };
+        let port: u16 = iter.next().pop().unwrap().parse()?;
+        let peer = PeerInfo { ipv4, ipv6, port };
         return Ok(Self {
             info_hash,
             passkey,
@@ -185,6 +187,7 @@ fn announce(ctx: &Context, args: Vec<String>) -> RedisResult {
     };
     sm.compaction();
     sm.update(passkey, peer);
+    key.set_expire(Duration::from_secs(2700))?;
     Ok(sm.gen_response(num_want))
 }
 
