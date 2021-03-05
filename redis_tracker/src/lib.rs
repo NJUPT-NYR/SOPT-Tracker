@@ -33,10 +33,11 @@ struct PeerInfo {
     port: u16,
 }
 
+type HashTable = IndexMap<String, PeerInfo>;
 struct SeederMap {
-    map: [IndexMap<String, PeerInfo>; 2],
+    map: [HashTable; 2],
     time_to_compaction: u64,
-    // mutable index map, can be 0/1
+    // mutable index table, can be 0/1
     mit: u8,
 }
 static SEEDER_MAP_TYPE: RedisType = RedisType::new(
@@ -127,18 +128,21 @@ impl SeederMap {
                 buf_peer6.extend_from_slice(&p.port.to_be_bytes());
             };
         }
-        // let s_peer = unsafe { String::from_utf8_unchecked(buf_peer) };
-        // let s_peer6 = unsafe { String::from_utf8_unchecked(buf_peer6) };
         RedisValue::Array(vec![
             RedisValue::Buffer(buf_peer),
             RedisValue::Buffer(buf_peer6),
         ])
     }
+    fn mem_usage(&self) -> usize {
+        let res = 0;
+        let x = self.map[0].capacity();
+        std::mem::size_of::<Self>()
+    }
 }
 
 impl TryFrom<Vec<String>> for AnnounceRequest {
     type Error = RedisError;
-    fn try_from(mut args: Vec<String>) -> Result<AnnounceRequest, RedisError> {
+    fn try_from(args: Vec<String>) -> Result<AnnounceRequest, RedisError> {
         if args.len() < 6 {
             return Err(RedisError::Str("FUCK U"));
         }
@@ -156,7 +160,7 @@ impl TryFrom<Vec<String>> for AnnounceRequest {
         if info_hash.len() != 20 {
             return Err(RedisError::Str("FUCK U"));
         }
-        let port: u16 = iter.next().pop().unwrap().parse()?;
+        let port: u16 = iter.next().unwrap().parse()?;
         let peer = PeerInfo { ipv4, ipv6, port };
         return Ok(Self {
             info_hash,
