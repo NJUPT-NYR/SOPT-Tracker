@@ -133,11 +133,6 @@ impl SeederMap {
             RedisValue::Buffer(buf_peer6),
         ])
     }
-    fn mem_usage(&self) -> usize {
-        let res = 0;
-        let x = self.map[0].capacity();
-        std::mem::size_of::<Self>()
-    }
 }
 
 impl TryFrom<Vec<String>> for AnnounceRequest {
