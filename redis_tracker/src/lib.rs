@@ -3,7 +3,7 @@ extern crate redis_module;
 
 use indexmap::IndexMap;
 use rand::Rng;
-use redis_module::native_types::RedisType;
+use redis_module::{native_types::RedisType, Status};
 use redis_module::{raw, Context, RedisError, RedisResult, RedisValue};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{
@@ -18,12 +18,12 @@ pub fn get_timestamp() -> u64 {
     let since_the_epoch = start
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards");
-    since_the_epoch.as_secs()
+    since_the_epoch.as_secs() & (std::u64::MAX - 1)
 }
 
 struct AnnounceRequest {
-    info_hash: String,
-    passkey: String,
+    pid: u64,
+    uid: u64,
     peer: PeerInfo,
 }
 
@@ -33,13 +33,29 @@ struct PeerInfo {
     port: u16,
 }
 
-type HashTable = IndexMap<String, PeerInfo>;
+type Key = u64;
+type Value = PeerInfo;
+
+type HashTable = IndexMap<Key, Value>;
+
+struct Bucket {
+    time_to_compaction: u64,
+    key: Key,
+    value: Value,
+}
+
 struct SeederMap {
     map: [HashTable; 2],
     time_to_compaction: u64,
-    // mutable index table, can be 0/1
-    mit: u8,
 }
+
+enum SeederInfo {
+    OneSeeder([Bucket; 1]),
+    TwoSeeder([Bucket; 2]),
+    ThreeSeeder([Bucket; 3]),
+    MulitSeeder(SeederMap),
+}
+
 static SEEDER_MAP_TYPE: RedisType = RedisType::new(
     "SeederMap",
     0,
@@ -67,37 +83,51 @@ impl SeederMap {
     fn new() -> Self {
         Self {
             map: [IndexMap::with_capacity(16), IndexMap::with_capacity(16)],
-            time_to_compaction: get_timestamp() + 2700,
-            mit: 0,
+            time_to_compaction: (get_timestamp() + 2700),
         }
     }
 
-    fn get_mit(&self) -> &IndexMap<String, PeerInfo> {
-        &self.map[self.mit as usize]
+    // mutable index table, can be 0/1
+    fn mit(&self) -> u8 {
+        (self.time_to_compaction % 2) as u8
     }
 
-    fn get_iit(&self) -> &IndexMap<String, PeerInfo> {
-        &self.map[(self.mit ^ 1) as usize]
+    fn swap_mit(&mut self) {
+        self.time_to_compaction ^= 1;
     }
 
-    fn get_mit_mut(&mut self) -> &mut IndexMap<String, PeerInfo> {
-        &mut self.map[self.mit as usize]
+    fn get_mit(&self) -> &HashTable {
+        &self.map[self.mit() as usize]
     }
 
-    fn get_iit_mut(&mut self) -> &mut IndexMap<String, PeerInfo> {
-        &mut self.map[(self.mit ^ 1) as usize]
+    fn get_iit(&self) -> &HashTable {
+        &self.map[(self.mit() ^ 1) as usize]
     }
 
-    fn update(&mut self, passkey: String, p: PeerInfo) {
+    fn get_mit_mut(&mut self) -> &mut HashTable {
+        &mut self.map[self.mit() as usize]
+    }
+
+    fn get_iit_mut(&mut self) -> &mut HashTable {
+        &mut self.map[(self.mit() ^ 1) as usize]
+    }
+
+    fn update_time_to_compaction(&mut self) {
+        let t = get_timestamp() + self.mit() as u64;
+        self.time_to_compaction = t;
+    }
+
+    fn update(&mut self, uid: u64, p: PeerInfo) {
         let m = self.get_mit_mut();
-        m.insert(passkey, p);
+        m.insert(uid, p);
     }
 
     fn compaction(&mut self) {
         if get_timestamp() > self.time_to_compaction {
             let mit = self.get_mit_mut();
             *self.get_iit_mut() = IndexMap::with_capacity(mit.len() + 10);
-            self.mit ^= 1;
+            self.update_time_to_compaction();
+            self.swap_mit()
         }
     }
 
@@ -142,8 +172,8 @@ impl TryFrom<Vec<String>> for AnnounceRequest {
             return Err(RedisError::Str("FUCK U"));
         }
         let mut iter = args.into_iter().skip(1);
-        let passkey = iter.next().unwrap();
-        let info_hash = iter.next().unwrap();
+        let pid = iter.next().unwrap().parse::<u64>()?;
+        let uid = iter.next().unwrap().parse::<u64>()?;
         let ipv4 = match iter.next().unwrap().as_str() {
             "none" => None,
             s @ _ => Some(s.parse()?),
@@ -152,28 +182,17 @@ impl TryFrom<Vec<String>> for AnnounceRequest {
             "none" => None,
             s @ _ => Some(s.parse()?),
         };
-        if info_hash.len() != 20 {
-            return Err(RedisError::Str("FUCK U"));
-        }
         let port: u16 = iter.next().unwrap().parse()?;
         let peer = PeerInfo { ipv4, ipv6, port };
-        return Ok(Self {
-            info_hash,
-            passkey,
-            peer,
-        });
+        return Ok(Self { pid, uid, peer });
     }
 }
 
-/* ANNOUNCE <info_hash> <passkey> <v4ip> <v6ip> <port> <EVENT> <NUMWANT> */
+/* ANNOUNCE <pid> <uid> <v4ip> <v6ip> <port> <EVENT> <NUMWANT> */
 fn announce(ctx: &Context, args: Vec<String>) -> RedisResult {
-    let AnnounceRequest {
-        info_hash,
-        passkey,
-        peer,
-    } = AnnounceRequest::try_from(args)?;
+    let AnnounceRequest { pid, uid, peer } = AnnounceRequest::try_from(args)?;
     let num_want = 50;
-    let key = ctx.open_key_writable(info_hash.as_str());
+    let key = ctx.open_key_writable(pid.to_string().as_str());
     if key.is_empty() {
         let value = SeederMap::new();
         key.set_value(&SEEDER_MAP_TYPE, value)?;
@@ -185,14 +204,36 @@ fn announce(ctx: &Context, args: Vec<String>) -> RedisResult {
         None => return Err(RedisError::Str("FUCK U")),
     };
     sm.compaction();
-    sm.update(passkey, peer);
+    sm.update(uid, peer);
     key.set_expire(Duration::from_secs(2700))?;
     Ok(sm.gen_response(num_want))
+}
+
+fn init(ctx: &Context, _: &Vec<String>) -> Status {
+    // ctx.log(LogL, message)
+    ctx.log_notice(format!("PeerInfo {}", std::mem::size_of::<PeerInfo>()).as_str());
+    ctx.log_notice(format!("SeederMap {}", std::mem::size_of::<SeederMap>()).as_str());
+    ctx.log_notice(format!("SeederInfo {}", std::mem::size_of::<SeederInfo>()).as_str());
+    ctx.log_notice(format!("Bucket {}", std::mem::size_of::<Bucket>()).as_str());
+    Status::Ok
 }
 
 redis_module! {
     name: "redistracker",
     version: 1,
     data_types: [SEEDER_MAP_TYPE],
-    commands: [["announce", announce, "write deny-oom", 1, 1, 1]]
+    init: init,
+    commands: [["announce", announce, "write deny-oom", 1, 1, 1]],
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_struct_size() {
+        println!("{}", std::mem::size_of::<PeerInfo>());
+        println!("{}", std::mem::size_of::<SeederMap>());
+        println!("{}", std::mem::size_of::<Bucket>());
+    }
 }
