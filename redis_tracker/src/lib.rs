@@ -1,23 +1,18 @@
 #[macro_use]
 extern crate redis_module;
 
-use data::SeederInfo;
+use peerinfo::PeerInfo;
 use redis_module::{native_types::RedisType, Status};
 use redis_module::{raw, Context, RedisError, RedisResult, RedisValue};
+use seederinfo::SeederInfo;
+use std::convert::TryFrom;
 use std::os::raw::c_void;
 use std::time::Duration;
-use std::{
-    convert::TryFrom,
-    net::{Ipv4Addr, Ipv6Addr},
-};
 
-mod data;
+mod peerinfo;
+mod seederinfo;
 mod util;
-pub struct PeerInfo {
-    ipv4: Option<Ipv4Addr>,
-    ipv6: Option<Ipv6Addr>,
-    port: u16,
-}
+
 struct AnnounceRequest {
     pid: u64,
     uid: u64,
@@ -65,7 +60,7 @@ impl TryFrom<Vec<String>> for AnnounceRequest {
             s @ _ => Some(s.parse()?),
         };
         let port: u16 = iter.next().unwrap().parse()?;
-        let peer = PeerInfo { ipv4, ipv6, port };
+        let peer = PeerInfo::from(ipv4, ipv6, port);
         return Ok(Self { pid, uid, peer });
     }
 }
@@ -91,11 +86,12 @@ fn announce(ctx: &Context, args: Vec<String>) -> RedisResult {
     Ok(sm.gen_response(num_want))
 }
 
-fn init(ctx: &Context, _: &Vec<String>) -> Status {
-    // ctx.log(LogL, message)
-    ctx.log_notice(format!("PeerInfo {}", std::mem::size_of::<PeerInfo>()).as_str());
-    // ctx.log_notice(format!("SeederMap {}", std::mem::size_of::<SeederMap>()).as_str());
-    ctx.log_notice(format!("SeederInfo {}", std::mem::size_of::<SeederInfo>()).as_str());
+fn init(_: &Context, _: &Vec<String>) -> Status {
+    // ctx.log_notice(format!("PeerInfo {}", std::mem::size_of::<PeerInfo>()).as_str());
+    // ctx.log_notice(format!("PeerInfo_O {}", std::mem::size_of::<peerinfo::PeerInfo_O>()).as_str());
+    // ctx.log_notice(format!("Bucket {}", std::mem::size_of::<seederinfo::Bucket>()).as_str());
+    // ctx.log_notice(format!("SeederMap {}", std::mem::size_of::<seederinfo::SeederMap>()).as_str());
+    // ctx.log_notice(format!("SeederInfo {}", std::mem::size_of::<SeederInfo>()).as_str());
     // ctx.log_notice(format!("Bucket {}", std::mem::size_of::<Bucket>()).as_str());
     Status::Ok
 }
@@ -110,10 +106,11 @@ redis_module! {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // use super::*;
 
     #[test]
     fn check_struct_size() {
-        println!("{}", std::mem::size_of::<PeerInfo>());
+        // println!("{}", std::mem::size_of::<PeerInfo>());
+        // println!("{}", std::mem::size_of::<seederinfo::Bucket>());
     }
 }

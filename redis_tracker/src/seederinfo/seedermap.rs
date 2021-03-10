@@ -1,57 +1,53 @@
 use indexmap::IndexMap;
 use rand::Rng;
-use redis_module::{native_types::RedisType, Status};
-use redis_module::{raw, Context, RedisError, RedisResult, RedisValue};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::{
-    convert::TryFrom,
-    net::{Ipv4Addr, Ipv6Addr},
-};
+use redis_module::RedisValue;
+
+use std::usize;
+use util::*;
 
 use super::*;
-use std::os::raw::c_void;
-
-
-pub fn get_timestamp() -> u64 {
-    let start = SystemTime::now();
-    let since_the_epoch = start
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards");
-    since_the_epoch.as_secs() & (std::u64::MAX - 1)
-}
-
-pub struct AnnounceRequest {
-    pid: u64,
-    uid: u64,
-    peer: PeerInfo,
-}
 
 type HashTable = IndexMap<Key, Value>;
+
+type SeederMapIter<'a> = std::iter::Chain<
+    indexmap::map::Iter<'a, u64, peerinfo::PeerInfo>,
+    indexmap::map::Iter<'a, u64, peerinfo::PeerInfo>,
+>;
 
 pub struct SeederMap {
     map: [HashTable; 2],
     time_to_compaction: u64,
-}
-
-unsafe extern "C" fn free(value: *mut c_void) {
-    Box::from_raw(value as *mut SeederMap);
+    mit: u8,
+    // draft: [u8; 7],
 }
 
 impl SeederMap {
     fn new() -> Self {
         Self {
             map: [IndexMap::with_capacity(16), IndexMap::with_capacity(16)],
-            time_to_compaction: (get_timestamp() + 2700),
+            time_to_compaction: (util::get_timestamp() + 2700),
+            mit: 0,
         }
+    }
+
+    pub fn from(sa: &SeederArray) -> Self {
+        let mut t = Self::new();
+        // future might need update
+        for (b, in_use) in sa.iter() {
+            if *in_use {
+                t.update(b.key, b.value.clone())
+            }
+        }
+        t
     }
 
     // mutable index table, can be 0/1
     fn mit(&self) -> u8 {
-        (self.time_to_compaction % 2) as u8
+        self.mit
     }
 
     fn swap_mit(&mut self) {
-        self.time_to_compaction ^= 1;
+        self.mit ^= 1;
     }
 
     fn get_mit(&self) -> &HashTable {
@@ -71,8 +67,12 @@ impl SeederMap {
     }
 
     fn update_time_to_compaction(&mut self) {
-        let t = get_timestamp() + self.mit() as u64;
+        let t = get_timestamp();
         self.time_to_compaction = t;
+    }
+
+    pub fn get_seeder_cnt(&self) -> usize {
+        self.get_iit().len() + self.get_mit().len()
     }
 
     pub fn update(&mut self, uid: u64, p: PeerInfo) {
@@ -107,18 +107,22 @@ impl SeederMap {
             .skip(rand)
             .take(num_want);
         while let Some((_, p)) = iter.next() {
-            if let Some(ref v4) = p.ipv4 {
+            if let Some(ref v4) = p.get_ipv4() {
                 buf_peer.extend_from_slice(&v4.octets());
-                buf_peer.extend_from_slice(&p.port.to_be_bytes());
+                buf_peer.extend_from_slice(&p.get_port().to_be_bytes());
             };
-            if let Some(v6) = p.ipv6 {
+            if let Some(v6) = p.get_ipv6() {
                 buf_peer6.extend_from_slice(&v6.octets());
-                buf_peer6.extend_from_slice(&p.port.to_be_bytes());
+                buf_peer6.extend_from_slice(&p.get_port().to_be_bytes());
             };
         }
         RedisValue::Array(vec![
             RedisValue::Buffer(buf_peer),
             RedisValue::Buffer(buf_peer6),
         ])
+    }
+
+    pub fn iter(&self) -> SeederMapIter {
+        self.get_mit().iter().chain(self.get_iit().iter())
     }
 }
