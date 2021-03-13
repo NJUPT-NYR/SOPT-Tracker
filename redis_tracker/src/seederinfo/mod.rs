@@ -70,16 +70,63 @@ impl SeederInfo {
         }
     }
 
-    pub fn update(&mut self, uid: u64, p: PeerInfo) {
+    pub fn delete(&mut self, uid: u64) {
         match self {
-            SeederInfo::MulitSeeder(sm) => sm.update(uid, p),
+            SeederInfo::MulitSeeder(sm) => sm.delete(uid),
+            SeederInfo::InlineSeeder(sa) => sa.delete(uid),
+        }
+    }
+
+    pub fn insert(&mut self, uid: u64, p: PeerInfo) {
+        match self {
+            SeederInfo::MulitSeeder(sm) => sm.insert(uid, &p),
             SeederInfo::InlineSeeder(sa) => {
                 if let Err(_) = sa.insert(uid, &p) {
                     let mut sm = SeederMap::from(sa);
-                    sm.update(uid, p);
+                    sm.insert(uid, &p);
                     *self = SeederInfo::MulitSeeder(sm);
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::peerinfo::PeerInfo;
+
+    use super::{seederarray::SeederArray, Bucket, SeederInfo, SeederMap};
+
+    #[test]
+    fn test_struct_size() {
+        assert_eq!(std::mem::size_of::<Bucket>(), 40);
+        assert!(std::mem::size_of::<SeederInfo>() <= 176);
+    }
+
+    #[test]
+    fn test_compaction() {
+        let sm = SeederMap::new();
+        let mut si = SeederInfo::MulitSeeder(sm);
+        si.compaction();
+        assert!(match si {
+            SeederInfo::MulitSeeder(_) => false,
+            SeederInfo::InlineSeeder(_) => true,
+        });
+    }
+
+    #[test]
+    fn test_upgrade() {
+        let v = PeerInfo::new();
+        let mut sa = SeederArray::new();
+        assert!(sa.insert(1, &v).is_ok());
+        assert!(sa.insert(2, &v).is_ok());
+        assert!(sa.insert(3, &v).is_ok());
+        assert!(sa.insert(4, &v).is_ok());
+        let mut si = SeederInfo::InlineSeeder(sa);
+        si.insert(5, v);
+        assert!(match si {
+            SeederInfo::MulitSeeder(_) => true,
+            SeederInfo::InlineSeeder(_) => false,
+        });
     }
 }

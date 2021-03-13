@@ -5,18 +5,49 @@ use peerinfo::PeerInfo;
 use redis_module::{native_types::RedisType, Status};
 use redis_module::{raw, Context, RedisError, RedisResult, RedisValue};
 use seederinfo::SeederInfo;
-use std::convert::TryFrom;
 use std::os::raw::c_void;
 use std::time::Duration;
+use std::{convert::TryFrom, str::FromStr};
 
 mod peerinfo;
 mod seederinfo;
 mod util;
 
+#[derive(Debug, PartialEq)]
+enum Event {
+    Started = 0,
+    Completed = 1,
+    Stopped = 2,
+}
+
+impl Event {
+    fn is_stop(&self) -> bool {
+        match self {
+            Event::Stopped => true,
+            _ => false,
+        }
+    }
+}
+
+impl FromStr for Event {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "started" => Event::Started,
+            "completed" => Event::Completed,
+            "stopped" => Event::Stopped,
+            _ => Event::Started,
+        })
+    }
+}
+
 struct AnnounceRequest {
     pid: u64,
     uid: u64,
     peer: PeerInfo,
+    numwant: usize,
+    event: Event,
 }
 
 static SEEDER_MAP_TYPE: RedisType = RedisType::new(
@@ -61,16 +92,40 @@ impl TryFrom<Vec<String>> for AnnounceRequest {
         };
         let port: u16 = iter.next().unwrap().parse()?;
         let peer = PeerInfo::from(ipv4, ipv6, port);
-        return Ok(Self { pid, uid, peer });
+
+        let numwant = match iter.next() {
+            None => 50,
+            Some(s) => s.parse()?,
+        };
+        let event = match iter.next() {
+            None => Event::Started,
+            Some(s) => s.parse()?,
+        };
+        return Ok(Self {
+            pid,
+            uid,
+            peer,
+            numwant,
+            event,
+        });
     }
 }
 
 /* ANNOUNCE <pid> <uid> <v4ip> <v6ip> <port> <EVENT> <NUMWANT> */
 fn announce(ctx: &Context, args: Vec<String>) -> RedisResult {
-    let AnnounceRequest { pid, uid, peer } = AnnounceRequest::try_from(args)?;
-    let num_want = 50;
+    let AnnounceRequest {
+        pid,
+        uid,
+        peer,
+        numwant,
+        event,
+    } = AnnounceRequest::try_from(args)?;
     let key = ctx.open_key_writable(pid.to_string().as_str());
     if key.is_empty() {
+        // as he left, no need to create an empty key. 
+        if event.is_stop() {
+            return Ok(RedisValue::SimpleStringStatic("?"));
+        }
         let value = SeederInfo::new();
         key.set_value(&SEEDER_MAP_TYPE, value)?;
     }
@@ -81,18 +136,19 @@ fn announce(ctx: &Context, args: Vec<String>) -> RedisResult {
         None => return Err(RedisError::Str("FUCK U")),
     };
     sm.compaction();
-    sm.update(uid, peer);
+    let response;
+    if event.is_stop() {
+        sm.delete(uid);
+        response = RedisValue::SimpleStringStatic("?");
+    } else {
+        sm.insert(uid, peer);
+        response = sm.gen_response(numwant);
+    }
     key.set_expire(Duration::from_secs(2700))?;
-    Ok(sm.gen_response(num_want))
+    Ok(response)
 }
 
 fn init(_: &Context, _: &Vec<String>) -> Status {
-    // ctx.log_notice(format!("PeerInfo {}", std::mem::size_of::<PeerInfo>()).as_str());
-    // ctx.log_notice(format!("PeerInfo_O {}", std::mem::size_of::<peerinfo::PeerInfo_O>()).as_str());
-    // ctx.log_notice(format!("Bucket {}", std::mem::size_of::<seederinfo::Bucket>()).as_str());
-    // ctx.log_notice(format!("SeederMap {}", std::mem::size_of::<seederinfo::SeederMap>()).as_str());
-    // ctx.log_notice(format!("SeederInfo {}", std::mem::size_of::<SeederInfo>()).as_str());
-    // ctx.log_notice(format!("Bucket {}", std::mem::size_of::<Bucket>()).as_str());
     Status::Ok
 }
 
@@ -106,11 +162,94 @@ redis_module! {
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
+    use std::{convert::TryFrom, net::Ipv4Addr, net::Ipv6Addr, str::FromStr};
+
+    use crate::{AnnounceRequest, Event};
+
+    fn dummy_request() -> Vec<String> {
+        vec![
+            "announce".into(),
+            "1".into(),
+            "1".into(),
+            "1.1.1.1".into(),
+            "::".into(),
+            "1".into(),
+        ]
+    }
+    #[test]
+    fn check_parse_event() {
+        assert!(Event::from_str("").is_ok());
+        assert_eq!("completed".parse(), Ok(Event::Completed));
+        assert_eq!("started".parse(), Ok(Event::Started));
+        assert_eq!("stopped".parse(), Ok(Event::Stopped));
+        assert_eq!("˚¬˚".parse(), Ok(Event::Started));
+    }
 
     #[test]
-    fn check_struct_size() {
-        // println!("{}", std::mem::size_of::<PeerInfo>());
-        // println!("{}", std::mem::size_of::<seederinfo::Bucket>());
+    fn check_parse_request0() {
+        let raw = dummy_request();
+        let req = AnnounceRequest::try_from(raw);
+        assert!(req.is_ok());
+        let req = req.unwrap();
+        assert_eq!(req.event, Event::Started);
+        assert_eq!(req.numwant, 50);
+        assert_eq!(req.pid, 1);
+        assert_eq!(req.uid, 1);
+        let p = req.peer;
+        assert_eq!(p.get_port(), 1);
+        assert_eq!(p.get_ipv4(), Some(Ipv4Addr::new(1, 1, 1, 1)));
+        assert_eq!(p.get_ipv6(), Some(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0)));
+    }
+    #[test]
+    fn check_parse_request1() {
+        let mut raw = dummy_request();
+        raw.push("100".into());
+        raw.push("stopped".into());
+        let req = AnnounceRequest::try_from(raw);
+        assert!(req.is_ok());
+        let req = req.unwrap();
+        assert_eq!(req.event, Event::Stopped);
+        assert_eq!(req.numwant, 100);
+    }
+    #[test]
+    fn check_parse_request2() {
+        let mut raw = dummy_request();
+        raw.push("-100".into());
+        let req = AnnounceRequest::try_from(raw);
+        assert!(req.is_err());
+    }
+
+    #[test]
+    fn check_parse_request3() {
+        let mut raw = dummy_request();
+        raw.pop();
+        let req = AnnounceRequest::try_from(raw);
+        assert!(req.is_err());
+    }
+
+    #[test]
+    fn check_parse_request4() {
+        let mut raw = dummy_request();
+        raw[5] = "-1".into();
+        let req = AnnounceRequest::try_from(raw);
+        assert!(req.is_err());
+    }
+
+    #[test]
+    fn check_parse_request5() {
+        let mut raw = dummy_request();
+        raw[5] = "65536".into();
+        let req = AnnounceRequest::try_from(raw);
+        assert!(req.is_err());
+    }
+
+    #[test]
+    fn check_parse_request6() {
+        let mut raw = dummy_request();
+        raw[4] = "none".into();
+        let req = AnnounceRequest::try_from(raw);
+        assert!(req.is_ok());
+        let p = req.unwrap().peer;
+        assert!(p.get_ipv6().is_none());
     }
 }
