@@ -77,7 +77,13 @@ impl SeederMap {
 
     pub fn insert(&mut self, uid: u64, p: &PeerInfo) {
         let m = self.get_mit_mut();
-        m.insert(uid, p.clone());
+        match m.get_mut(&uid) {
+            Some(v) => v.update(p),
+            None => {
+                m.insert(uid, p.clone());
+            }
+        };
+        self.get_iit_mut().swap_remove(&uid);
     }
 
     pub fn delete(&mut self, uid: u64) {

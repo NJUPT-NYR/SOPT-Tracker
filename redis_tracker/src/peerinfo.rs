@@ -60,6 +60,23 @@ impl PeerInfo {
     pub fn get_port(&self) -> u16 {
         self.port
     }
+
+    pub fn update(&mut self, p2: &PeerInfo) {
+        match p2.get_ipv4() {
+            Some(ip) => {
+                self.ipv4 = ip;
+                self.has_v4 = true;
+            }
+            None => (),
+        };
+        match p2.get_ipv6() {
+            Some(ip) => {
+                self.ipv6 = ip;
+                self.has_v6 = true;
+            }
+            None => (),
+        };
+    }
 }
 
 impl Default for PeerInfo {

@@ -24,7 +24,7 @@ impl SeederArray {
         // try update
         for (b, &in_use) in self.seeders.iter_mut().zip(self.in_use.iter()) {
             if in_use && b.key == k {
-                b.value = v.clone();
+                b.value.update(v);
                 b.time_to_compaction = util::get_timestamp() + 2700;
                 return Ok(());
             }
