@@ -102,7 +102,7 @@ impl SeederMap {
         }
     }
 
-    pub fn gen_response(&self, num_want: usize) -> RedisValue {
+    pub fn gen_response(&self, num_want: usize) -> (Vec<u8>, Vec<u8>) {
         let mut buf_peer: Vec<u8> = Vec::with_capacity(num_want * 6);
         let mut buf_peer6: Vec<u8> = Vec::with_capacity(num_want * 18);
         let peer_cnt = self.map[0].len() + self.map[1].len();
@@ -129,10 +129,7 @@ impl SeederMap {
                 buf_peer6.extend_from_slice(&p.get_port().to_be_bytes());
             };
         }
-        RedisValue::Array(vec![
-            RedisValue::Buffer(buf_peer),
-            RedisValue::Buffer(buf_peer6),
-        ])
+        (buf_peer, buf_peer6)
     }
 
     pub fn iter(&self) -> SeederMapIter {

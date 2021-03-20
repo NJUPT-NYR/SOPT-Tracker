@@ -59,7 +59,7 @@ impl SeederArray {
         }
     }
 
-    pub fn gen_response(&self) -> RedisValue {
+    pub fn gen_response(&self) -> (Vec<u8>, Vec<u8>) {
         let mut buf_peer: Vec<u8> = Vec::with_capacity(SEEDER_ARRAY_LENGTH * 6);
         let mut buf_peer6: Vec<u8> = Vec::with_capacity(SEEDER_ARRAY_LENGTH * 18);
         for (b, &in_use) in self.seeders.iter().zip(self.in_use.iter()) {
@@ -75,10 +75,7 @@ impl SeederArray {
                 };
             }
         }
-        RedisValue::Array(vec![
-            RedisValue::Buffer(buf_peer),
-            RedisValue::Buffer(buf_peer6),
-        ])
+        (buf_peer, buf_peer6)
     }
 
     pub fn from(sm: &SeederMap) -> Result<Self, ()> {

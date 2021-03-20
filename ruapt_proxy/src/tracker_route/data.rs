@@ -1,8 +1,9 @@
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-use deadpool_redis::{cmd, Cmd};
+use deadpool_redis::{cmd, redis::Value, Cmd};
 use error::ProxyError;
-use serde::{Deserialize};
+use serde::Deserialize;
+use bendy::encoding;
 
 use crate::error;
 
@@ -27,8 +28,7 @@ pub struct AnnounceRequestData {
 impl AnnounceRequestData {
     pub fn validation(&mut self) -> Result<(), error::ProxyError> {
         if self.peer_id.len() != 20 {
-            println!("peerid {}", self.peer_id.len());
-            return Err(ProxyError {});
+            return Err(ProxyError::RequestError("peer_id's length should be 20 bytes!"));
         }
         Ok(())
     }
@@ -96,5 +96,48 @@ impl ToString for Event {
             Event::Stopped => "stopped",
         }
         .into()
+    }
+}
+
+pub struct AnnounceResponseData {
+    interval: i64,
+    peers: Vec<u8>,
+    peers6: Vec<u8>,
+}
+
+impl From<Vec<Value>> for AnnounceResponseData {
+    fn from(t: Vec<Value>) -> Self {
+        let mut iter = t.into_iter();
+        let interval = match iter.next() {
+            Some(Value::Int(i)) => i,
+            _ => 1800,
+        };
+        let peers = match iter.next() {
+            Some(Value::Data(peers)) => peers,
+            _ => vec![],
+        };
+        let peers6 = match iter.next() {
+            Some(Value::Data(peers6)) => peers6,
+            _ => vec![],
+        };
+        Self {
+            interval,
+            peers,
+            peers6,
+        }
+    }
+}
+
+impl encoding::ToBencode for AnnounceResponseData {
+    const MAX_DEPTH: usize = 3;
+
+    fn encode(&self, encoder: encoding::SingleItemEncoder) -> Result<(), encoding::Error> {
+        encoder.emit_dict(|mut e| {
+            e.emit_pair(b"inteval", self.interval)?;
+            e.emit_pair(b"peers", &self.peers)?;
+            e.emit_pair(b"peers6", &self.peers6)?;
+            Ok(())
+        })?;
+        Ok(())
     }
 }

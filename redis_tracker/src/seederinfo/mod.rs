@@ -64,10 +64,18 @@ impl SeederInfo {
     }
 
     pub fn gen_response(&self, num_want: usize) -> RedisValue {
-        match self {
+        let (peers, peers6) = match self {
             SeederInfo::MulitSeeder(sm) => sm.gen_response(num_want),
             SeederInfo::InlineSeeder(sa) => sa.gen_response(),
-        }
+        };
+        RedisValue::Array(vec![
+            // interval
+            RedisValue::Integer(1800),
+            RedisValue::Buffer(peers),
+            RedisValue::Buffer(peers6)
+        ]
+
+        )
     }
 
     pub fn delete(&mut self, uid: u64) {
