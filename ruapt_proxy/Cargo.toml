@@ -14,3 +14,8 @@ env_logger = "*"
 deadpool-redis = "0.6.1"
 deadpool = "*"
 bendy = "*"
+config = "*"
+dotenv = "*"
+serde_qs = "*"
+lazy_static = "*"
+reqwest = { version = "0.11", features = [ "json" ] }

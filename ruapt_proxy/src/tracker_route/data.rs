@@ -1,11 +1,9 @@
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use deadpool_redis::{cmd, redis::Value, Cmd};
-use error::ProxyError;
-use serde::Deserialize;
+use crate::error::ProxyError;
+use serde::{Deserialize, Serialize};
 use bendy::encoding;
-
-use crate::error;
 
 #[derive(Deserialize, Debug)]
 pub struct AnnounceRequestData {
@@ -13,8 +11,8 @@ pub struct AnnounceRequestData {
     // pub info_hash: Vec<u8>,
     pub peer_id: String,
     pub port: u16,
-    pub uid: u64,
-    pub tid: u64,
+    pub uid: i64,
+    pub tid: i64,
     pub passkey: String,
     pub ip: Option<IpAddr>,
     pub ipv4: Option<Ipv4Addr>,
@@ -23,10 +21,12 @@ pub struct AnnounceRequestData {
     pub event: Event,
     #[serde(default = "crate::config::default_num_want")]
     pub numwant: u16,
+    pub upload: i64,
+    pub download: i64,
 }
 
 impl AnnounceRequestData {
-    pub fn validation(&mut self) -> Result<(), error::ProxyError> {
+    pub fn validation(&mut self) -> Result<(), ProxyError> {
         if self.peer_id.len() != 20 {
             return Err(ProxyError::RequestError("peer_id's length should be 20 bytes!"));
         }
@@ -55,7 +55,7 @@ impl AnnounceRequestData {
         self.ipv6 = true_v6;
     }
 
-    pub fn into_announce_cmd(&self) -> Cmd {
+    pub fn generate_announce_cmd(&self) -> Cmd {
         let ipv4 = match self.ipv4 {
             Some(ip) => ip.to_string(),
             None => String::from("none"),
@@ -75,6 +75,7 @@ impl AnnounceRequestData {
         acmd
     }
 }
+
 #[derive(Deserialize, Debug, Copy, Clone)]
 pub enum Event {
     Started = 0,
@@ -95,8 +96,43 @@ impl ToString for Event {
             Event::Completed => "completed",
             Event::Stopped => "stopped",
         }
-        .into()
+            .into()
     }
+}
+
+#[derive(Serialize, Debug)]
+pub struct AnnounceBypassData {
+    uid: i64,
+    tid: i64,
+    upload: i64,
+    download: i64,
+    action: Option<Action>,
+}
+
+impl From<AnnounceRequestData> for AnnounceBypassData {
+    fn from(t: AnnounceRequestData) -> Self {
+        let action = match t.event {
+            Event::Started => Action::Start,
+            Event::Completed => Action::Complete,
+            Event::Stopped => Action::Stop,
+        };
+
+        Self {
+            uid: t.uid,
+            tid: t.tid,
+            upload: t.upload,
+            download: t.download,
+            action: Some(action),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Serialize, Debug, Copy, Clone)]
+enum Action {
+    Start = 0,
+    Complete,
+    Stop,
 }
 
 pub struct AnnounceResponseData {
