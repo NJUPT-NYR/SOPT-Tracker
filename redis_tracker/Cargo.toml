@@ -1,0 +1,19 @@
+[package]
+name = "redis_tracker"
+version = "0.1.0"
+authors = ["qinwu.qw <qinwu.qw@alibaba-inc.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+name = "retracker"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+redis-module = { git = "https://github.com/Hydrogen5/redismodule-rs" }
+indexmap = "1.6.1"
+rand = "0.8.3"
+
+[dev-dependencies]
+redis-module = { git = "https://github.com/Hydrogen5/redismodule-rs", features = ["test"] }

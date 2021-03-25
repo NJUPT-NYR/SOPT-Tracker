@@ -1,55 +1,59 @@
+mod config;
 mod data;
 mod error;
 mod storage;
 mod util;
 
-use serde_bencode::{de, ser};
+use bendy::encoding::ToBencode;
+use bytes::Bytes;
+use data::AnnouncePacket;
+use dotenv::dotenv;
 use futures::prelude::*;
+use std::env;
 use std::sync::Arc;
 use storage::redis::DB;
 use storage::Storage;
-use tokio::net::TcpListener;
-use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
-use crate::data::{Request, AnnounceRequestData};
+use tokio::{io::AsyncReadExt, net::TcpListener};
+use tokio_util::codec::{FramedWrite, LengthDelimitedCodec};
 
 async fn tracker_loop(socket: tokio::net::TcpStream, db: std::sync::Arc<storage::redis::DB>) {
-    let (read_half, write_half) = socket.into_split();
-    let mut reader = FramedRead::new(read_half, LengthDelimitedCodec::new());
+    let (mut read_half, write_half) = socket.into_split();
     let mut writer = FramedWrite::new(write_half, LengthDelimitedCodec::new());
-    while let Ok(Some(msg)) = reader.try_next().await {
-        let a: AnnounceRequestData = match de::from_bytes(&msg) {
-            Ok(a) => a,
-            _ => continue,
-        };
-
-        if let Some(r) = db.announce(&a).await.unwrap() {
-            let bytes = ser::to_bytes(&r).unwrap();
-            writer.send(bytes.into()).await.unwrap();
+    let mut p = AnnouncePacket::new();
+    let error_response = b"d7:failure21:internal server errore";
+    loop {
+        if let Err(e) = read_half.read_exact(p.as_mut_bytes()).await {
+            println!("{}", e);
+            return;
+        } else {
+            let bytes = match db.announce(&p).await {
+                Ok(None) => Bytes::from_static(b""),
+                Ok(Some(r)) => match r.to_bencode() {
+                    Ok(v) => Bytes::from(v),
+                    Err(err) => {
+                        println!("{:?}", err);
+                        Bytes::from_static(error_response)
+                    }
+                },
+                Err(err) => {
+                    println!("{:?}", err);
+                    Bytes::from_static(error_response)
+                }
+            };
+            if let Err(e) = writer.send(bytes).await {
+                println!("{}", e);
+                return;
+            }
         }
-
-        // Rust does not support sub-typing and trait downcast may be unsound
-        // so forgive me for such dull code
-        // TODO: use backend for dispatch
-        // match a {
-        //     Request::Announce(req) =>
-        //         if let Some(r) = db.announce(&req).await.unwrap() {
-        //             let bytes = to_bytes(&r).unwrap();
-        //             writer.send(bytes.into()).await.unwrap();
-        //         },
-        //     Request::Scrape(req) =>
-        //         if let Some(r) = db.scrape(&req).await.unwrap() {
-        //             let bytes = to_bytes(&r).unwrap();
-        //             writer.send(bytes.into()).await.unwrap();
-        //         }
-        // };
     }
 }
 
 async fn compaction_loop(db: std::sync::Arc<storage::redis::DB>) {
     loop {
         // TODO: make the compaction more smooth
-        // TODO: here need some logs
-        db.compaction().await;
+        if let Err(e) = db.compaction().await {
+            println!("{:?}", e);
+        }
         tokio::time::sleep(tokio::time::Duration::from_secs(300)).await;
     }
 }
@@ -58,18 +62,37 @@ async fn compaction_loop(db: std::sync::Arc<storage::redis::DB>) {
 // ptmalloc : 282% 46ms 16M
 #[global_allocator]
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 #[tokio::main(flavor = "multi_thread", worker_threads = 3)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("<================Rua PT is running================>");
-    // TODO: use config file
-    let db = Arc::new(DB::new(
-        "redis://:1234567890@127.0.0.1:6379/0",
-        "redis://:1234567890@127.0.0.1:6379/1",
-    ));
+    println!("<================Rua PT is Starting================>");
+
+    assert_eq!(std::mem::size_of::<AnnouncePacket>(), 80);
+    dotenv()?;
+    let db = Arc::new(match env::var("STORAGE_ENGINE")?.as_str() {
+        "redis" => {
+            let torrent_uri = env::var("REDIS.TORRENT_URI")?;
+            let user_uri = env::var("REDIS.USER_URI")?;
+            DB::new(torrent_uri.as_str(), user_uri.as_str())
+        }
+        _ => {
+            panic!("Unknown Storage Engine")
+        }
+    });
     tokio::spawn(compaction_loop(db.clone()));
-    let listener = TcpListener::bind("127.0.0.1:8081").await.unwrap();
+    let server_addr = env::var("SERVER_ADDR")?;
+    let listener = TcpListener::bind(&server_addr)
+        .await
+        .expect(format!("Bind to {} failed!", &server_addr).as_str());
+    println!("<================Rua PT is Full Started================>");
     loop {
-        let (socket, _) = listener.accept().await?;
-        tokio::spawn(tracker_loop(socket, db.clone()));
+        match listener.accept().await {
+            Ok((socket, _)) => {
+                tokio::spawn(tracker_loop(socket, db.clone()));
+            }
+            Err(e) => {
+                println!("{}", e);
+            }
+        }
     }
 }

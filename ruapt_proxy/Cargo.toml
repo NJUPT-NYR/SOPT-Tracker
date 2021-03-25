@@ -9,10 +9,13 @@ workspace = "../"
 
 [dependencies]
 serde = "*"
+actix-web = "3"
+env_logger = "*"
+deadpool-redis = "0.6.1"
 deadpool = "*"
-async-trait = "*"
-tokio =  { version = "^0.2", features = ["full"] }
-bendy = { version = "^0.3", features = ["std", "serde"] }
-tokio-util = { version = "0.3.1", features = ["full"] }
-futures = "0.3"
-rand = "*"
+bendy = "*"
+config = "*"
+dotenv = "*"
+serde_qs = "*"
+lazy_static = "*"
+reqwest = { version = "0.11", features = [ "json" ] }
