@@ -133,6 +133,7 @@ impl Storage for DB {
         if Event::Completed as u8 == data.event {
             to_con.srem(&info_hash_ext, &data.passkey).await?;
         }
+
         // use t_id instead info_hash to decrease memory usage
         // actually, if it is worth using t_id is unknown
         // then get the return value
@@ -144,8 +145,7 @@ impl Storage for DB {
         p.execute_async(&mut user_con).await?;
         p.clear();
         let now = get_timestamp();
-        p.zadd(&info_hash, &data.encode_info(), now);
-        p.sadd(&info_hash_ext, &data.passkey);
+        p.zadd(&info_hash, data.encode_info(), now);
         p.expire(&info_hash, 300);
         p.execute_async(&mut to_con).await?;
         // ZRANGEBYSCORE t_id now-300 +inf LIMIT 0 num_want
