@@ -4,7 +4,8 @@ use deadpool_redis::{cmd, redis::Value, Cmd};
 use error::ProxyError;
 use serde::Deserialize;
 use bendy::encoding;
-
+use super::context::Filter;
+use tokio::sync::RwLock;
 use crate::error;
 
 #[derive(Deserialize, Debug)]
@@ -26,9 +27,13 @@ pub struct AnnounceRequestData {
 }
 
 impl AnnounceRequestData {
-    pub fn validation(&mut self) -> Result<(), error::ProxyError> {
+    pub async fn validation(&mut self, filter: &RwLock<Filter>) -> Result<(), error::ProxyError> {
         if self.peer_id.len() != 20 {
             return Err(ProxyError::RequestError("peer_id's length should be 20 bytes!"));
+        }
+        let filter = filter.read().await;
+        if !filter.contains(&self.passkey) {
+            return Err(ProxyError::RequestError("Passkey not found! Check your torrent please."))
         }
         Ok(())
     }
@@ -140,4 +145,9 @@ impl encoding::ToBencode for AnnounceResponseData {
         })?;
         Ok(())
     }
+}
+#[derive(Deserialize)]
+pub struct UpdateFilterCommand {
+    pub set: Option<String>,
+    pub delete: Option<String>
 }
