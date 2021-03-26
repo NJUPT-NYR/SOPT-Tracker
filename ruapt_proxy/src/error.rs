@@ -24,13 +24,19 @@ impl<T> From<PoolError<T>> for ProxyError {
 }
 
 impl From<RedisError> for ProxyError {
-    fn from(e: RedisError) -> Self {
+    fn from(_: RedisError) -> Self {
         Self::RedisError
     }
 }
 
 impl From<bendy::encoding::Error> for ProxyError {
-    fn from(e: bendy::encoding::Error) -> Self {
+    fn from(_: bendy::encoding::Error) -> Self {
+        Self::EncodeError
+    }
+}
+
+impl From<serde_qs::Error> for ProxyError {
+    fn from(_: serde_qs::Error) -> Self {
         Self::EncodeError
     }
 }

@@ -16,3 +16,8 @@ deadpool = "*"
 bendy = "*"
 cuckoofilter = "0.5.0"
 tokio = { version = "1", features = ["sync"] }
+config = "*"
+dotenv = "*"
+serde_qs = "*"
+lazy_static = "*"
+reqwest = { version = "0.11", features = [ "json" ] }

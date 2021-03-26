@@ -1,6 +1,5 @@
 use indexmap::IndexMap;
 use rand::Rng;
-use redis_module::RedisValue;
 
 use std::usize;
 use util::*;

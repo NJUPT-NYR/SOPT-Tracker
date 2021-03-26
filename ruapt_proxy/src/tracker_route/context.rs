@@ -15,7 +15,6 @@ pub struct Context {
 
 impl Context {
     pub fn new(uri: &str) -> Self {
-        // TODO: configable
         let mut cfg = Config::default();
         cfg.url = Some(uri.to_string());
         let filter = RwLock::new(Filter::new());
