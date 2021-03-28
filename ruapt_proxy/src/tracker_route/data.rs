@@ -1,12 +1,8 @@
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use deadpool_redis::{cmd, redis::Value, Cmd};
-use crate::error::ProxyError;
 use serde::{Deserialize, Serialize};
 use bendy::encoding;
-use super::context::Filter;
-use tokio::sync::RwLock;
-use crate::error;
 
 #[derive(Deserialize, Debug)]
 pub struct AnnounceRequestData {
@@ -29,17 +25,6 @@ pub struct AnnounceRequestData {
 }
 
 impl AnnounceRequestData {
-    pub async fn validation(&mut self, filter: &RwLock<Filter>) -> Result<(), error::ProxyError> {
-        if self.peer_id.len() != 20 {
-            return Err(ProxyError::RequestError("peer_id's length should be 20 bytes!"));
-        }
-        let filter = filter.read().await;
-        if !filter.contains(&self.passkey) {
-            return Err(ProxyError::RequestError("Passkey not found! Check your torrent please."))
-        }
-        Ok(())
-    }
-
     pub fn fix_ip(&mut self, peer_addr: Option<IpAddr>) {
         let mut true_v4 = None;
         let mut true_v6 = None;

@@ -3,9 +3,7 @@ use crate::error::ProxyError;
 use crate::ProxyResult;
 
 use super::context::Context;
-use super::data::{
-    AnnounceBypassData, AnnounceRequestData, AnnounceResponseData, UpdateFilterCommand,
-};
+use super::data::{AnnounceBypassData, AnnounceRequestData, AnnounceResponseData};
 use actix_web::*;
 use bendy::encoding::ToBencode;
 use deadpool_redis::redis::Value;
@@ -14,10 +12,10 @@ use deadpool_redis::redis::Value;
 pub async fn announce(
     web::Query(mut q): web::Query<AnnounceRequestData>,
     req: HttpRequest,
-    data: web::Data<Context>,
+    data: web::Data<Context<'_>>,
 ) -> ProxyResult {
     let peer_ip = req.peer_addr().map(|addr| addr.ip());
-    q.validation(&data.filter).await?;
+    data.validation(&q).await?;
     q.fix_ip(peer_ip);
 
     let mut cxn = data.pool.get().await?;
@@ -37,19 +35,4 @@ pub async fn announce(
     }
 
     Ok(HttpResponse::Ok().body(x))
-}
-
-#[post("/updatefilter")]
-pub async fn update_filter(
-    web::Query(q): web::Query<UpdateFilterCommand>,
-    data: web::Data<Context>,
-) -> ProxyResult {
-    let mut filter = data.filter.write().await;
-    if let Some(insert) = q.set {
-        filter.add(&insert);
-    }
-    if let Some(delete) = q.delete {
-        filter.delete(&delete);
-    }
-    Ok(HttpResponse::Ok().finish())
 }

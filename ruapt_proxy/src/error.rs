@@ -8,6 +8,7 @@ pub enum ProxyError {
     RequestError(&'static str),
     RedisError,
     PoolError,
+    RocksError,
     EncodeError,
 }
 
@@ -35,6 +36,12 @@ impl From<bendy::encoding::Error> for ProxyError {
     }
 }
 
+impl From<rocksdb::Error> for ProxyError {
+    fn from(_: rocksdb::Error) -> Self {
+        Self::RocksError
+    }
+}
+
 impl From<serde_qs::Error> for ProxyError {
     fn from(_: serde_qs::Error) -> Self {
         Self::EncodeError
@@ -46,6 +53,6 @@ impl std::error::Error for ProxyError {}
 impl ResponseError for ProxyError {
     /// Transform error messages to Http Response.
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::InternalServerError().body("Error: TODO")
+        HttpResponse::InternalServerError().body(format!("Error: {:?}", self))
     }
 }
