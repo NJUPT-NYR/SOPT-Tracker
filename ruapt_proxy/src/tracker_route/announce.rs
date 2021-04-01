@@ -1,21 +1,21 @@
 use crate::config::CONFIG;
-use crate::ProxyResult;
 use crate::error::ProxyError;
+use crate::ProxyResult;
 
 use super::context::Context;
-use super::data::{AnnounceRequestData, AnnounceResponseData, AnnounceBypassData};
+use super::data::{AnnounceBypassData, AnnounceRequestData, AnnounceResponseData};
 use actix_web::*;
-use deadpool_redis::redis::Value;
 use bendy::encoding::ToBencode;
+use deadpool_redis::redis::Value;
 
 #[get("/announce")]
 pub async fn announce(
     web::Query(mut q): web::Query<AnnounceRequestData>,
     req: HttpRequest,
-    data: web::Data<Context>,
+    data: web::Data<Context<'_>>,
 ) -> ProxyResult {
     let peer_ip = req.peer_addr().map(|addr| addr.ip());
-    q.validation()?;
+    data.validation(&q).await?;
     q.fix_ip(peer_ip);
 
     let mut cxn = data.pool.get().await?;
@@ -27,7 +27,9 @@ pub async fn announce(
     let req = AnnounceBypassData::from(q);
     let req = serde_qs::to_string(&req)?;
     let addr = format!("{}?{}", CONFIG.backend_announce_addr, req);
-    let resp = reqwest::get(addr).await.map_err(|_| ProxyError::RequestError("bypass to backend failed"))?;
+    let resp = reqwest::get(addr)
+        .await
+        .map_err(|_| ProxyError::RequestError("bypass to backend failed"))?;
     if !resp.status().is_success() {
         return Err(ProxyError::RequestError("bypass to backend failed"));
     }

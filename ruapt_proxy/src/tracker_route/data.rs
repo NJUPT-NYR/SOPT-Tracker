@@ -1,7 +1,6 @@
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use deadpool_redis::{cmd, redis::Value, Cmd};
-use crate::error::ProxyError;
 use serde::{Deserialize, Serialize};
 use bendy::encoding;
 
@@ -26,13 +25,6 @@ pub struct AnnounceRequestData {
 }
 
 impl AnnounceRequestData {
-    pub fn validation(&mut self) -> Result<(), ProxyError> {
-        if self.peer_id.len() != 20 {
-            return Err(ProxyError::RequestError("peer_id's length should be 20 bytes!"));
-        }
-        Ok(())
-    }
-
     pub fn fix_ip(&mut self, peer_addr: Option<IpAddr>) {
         let mut true_v4 = None;
         let mut true_v6 = None;
@@ -176,4 +168,9 @@ impl encoding::ToBencode for AnnounceResponseData {
         })?;
         Ok(())
     }
+}
+#[derive(Deserialize)]
+pub struct UpdateFilterCommand {
+    pub set: Option<String>,
+    pub delete: Option<String>
 }
