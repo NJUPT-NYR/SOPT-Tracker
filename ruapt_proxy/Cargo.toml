@@ -14,7 +14,7 @@ env_logger = "*"
 deadpool = "0.5.2"
 deadpool-redis = "0.6.1"
 bendy = "*"
-cuckoofilter = "0.5.0"
+bloom = "0.3.2"
 tokio = { version = "1", features = ["sync"] }
 config = "*"
 dotenv = "*"
