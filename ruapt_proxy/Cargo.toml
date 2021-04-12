@@ -14,9 +14,9 @@ deadpool = "0.5.2"
 deadpool-redis = "0.6.1"
 bendy = "*"
 bloom = "0.3.2"
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "^0.2", features = ["sync"] }
 config = "*"
 dotenv = "*"
 serde_qs = "*"
 lazy_static = "*"
-reqwest = { version = "0.11", features = [ "json" ] }
+reqwest = { version = "0.10", features = [ "json" ] }

@@ -44,7 +44,7 @@ async fn announce(
     let req = AnnounceBypassData::from(q);
     let req = serde_qs::to_string(&req)?;
     let addr = format!("{}?{}", CONFIG.backend_announce_addr, req);
-    let resp = reqwest::get(addr)
+    let resp = reqwest::get(&addr)
         .await
         .map_err(|_| ProxyError::RequestError("bypass to backend failed"))?;
     if !resp.status().is_success() {
