@@ -1,43 +1,30 @@
+use crate::config::CONFIG;
 use crate::error::ProxyError;
+use crate::filter::Filter;
 use deadpool::managed;
 use deadpool_redis::{redis::RedisError, Config, ConnectionWrapper};
 use lazy_static::lazy_static;
-use rocksdb::{ColumnFamily, DB};
+use std::sync::Arc;
+
 type Pool = managed::Pool<ConnectionWrapper, RedisError>;
 
 lazy_static! {
-    static ref ROCKSDB: DB = DB::open_cf_for_read_only(
-        &Context::<'_>::rocksdb_options(),
-        "./rocksdb",
-        &["passkey"],
-        false
-    )
-    .expect("Cannot open rocksdb");
+    pub static ref CONTEXT: Arc<Context> = Arc::new(Context::new(&CONFIG.redis_uri));
 }
 
-pub struct Context<'a> {
+pub struct Context {
     pub pool: Pool,
-    pub rocks: &'a DB,
-    pub passkey_cf: &'a ColumnFamily, // TODO: A connection to backend
-                                      // TODO: monitor, LOGGER are needed
+    pub filter: Filter,
+    // TODO: monitor, LOGGER are needed
 }
 
-impl<'a> Context<'a> {
-    pub fn rocksdb_options() -> rocksdb::Options {
-        rocksdb::Options::default()
-    }
-
+impl Context {
     pub fn new(uri: &str) -> Self {
         let mut cfg = Config::default();
         cfg.url = Some(uri.to_string());
         let pool = cfg.create_pool().expect("Create Redis Pool Failed!");
-        let rocks = &ROCKSDB;
-        let passkey_cf = rocks.cf_handle("passkey").expect("Cannot open clumn");
-        Context {
-            pool,
-            rocks,
-            passkey_cf,
-        }
+        let filter = Filter::new();
+        Context { pool, filter }
     }
 
     pub async fn validation(
@@ -49,8 +36,7 @@ impl<'a> Context<'a> {
                 "peer_id's length should be 20 bytes!",
             ));
         }
-        let passkey_cf = self.rocks.cf_handle("passkey").expect("GG");
-        if self.rocks.get_cf(passkey_cf, &data.passkey)?.is_none() {
+        if !self.filter.contains(&data.passkey).await {
             return Err(ProxyError::RequestError(
                 "Passkey not found! Check your torrent please.",
             ));

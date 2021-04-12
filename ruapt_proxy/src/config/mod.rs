@@ -1,8 +1,8 @@
 // mod client;
 
 use config::ConfigError;
-use serde::Deserialize;
 use lazy_static::lazy_static;
+use serde::Deserialize;
 use std::sync::Arc;
 
 lazy_static! {
@@ -22,6 +22,7 @@ pub fn default_num_want() -> u16 {
 pub struct Config {
     pub server_addr: String,
     pub redis_uri: String,
+    pub database_url: String,
     pub backend_announce_addr: String,
 }
 

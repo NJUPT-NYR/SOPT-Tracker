@@ -122,7 +122,7 @@ fn announce(ctx: &Context, args: Vec<String>) -> RedisResult {
     } = AnnounceRequest::try_from(args)?;
     let key = ctx.open_key_writable(pid.to_string().as_str());
     if key.is_empty() {
-        // as he left, no need to create an empty key. 
+        // as he left, no need to create an empty key.
         if event.is_stop() {
             return Ok(RedisValue::SimpleStringStatic("?"));
         }

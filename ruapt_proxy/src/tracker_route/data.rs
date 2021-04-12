@@ -1,8 +1,8 @@
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
+use bendy::encoding;
 use deadpool_redis::{cmd, redis::Value, Cmd};
 use serde::{Deserialize, Serialize};
-use bendy::encoding;
 
 #[derive(Deserialize, Debug)]
 pub struct AnnounceRequestData {
@@ -88,7 +88,7 @@ impl ToString for Event {
             Event::Completed => "completed",
             Event::Stopped => "stopped",
         }
-            .into()
+        .into()
     }
 }
 
@@ -169,8 +169,9 @@ impl encoding::ToBencode for AnnounceResponseData {
         Ok(())
     }
 }
+
 #[derive(Deserialize)]
 pub struct UpdateFilterCommand {
     pub set: Option<String>,
-    pub delete: Option<String>
+    pub delete: Option<String>,
 }
