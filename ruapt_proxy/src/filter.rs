@@ -22,12 +22,15 @@ enum Operation {
 pub struct Filter {
     inner: RwLock<CountingBloomFilter>,
     capacity: AtomicU32,
-    cache: RwLock<HashMap<String, Operation>>,
+    // cache: RwLock<HashMap<String, Operation>>,
+    cache: RwLock<Vec<(String, Operation)>>,
     in_expand: AtomicBool,
 }
 
 impl Filter {
-    fn batch_update(inner: &mut CountingBloomFilter, ops: HashMap<String, Operation>) {
+    const BATCH_SIZE: usize = 32;
+
+    fn batch_update(inner: &mut CountingBloomFilter, ops: Vec<(String, Operation)>) {
         for (key, op) in ops.into_iter() {
             match op {
                 Operation::Set => {
@@ -40,8 +43,8 @@ impl Filter {
         }
     }
 
-    async fn fetch_cache(&self) -> HashMap<String, Operation> {
-        let mut new_cache = HashMap::new();
+    async fn fetch_cache(&self) -> Vec<(String, Operation)> {
+        let mut new_cache = Vec::with_capacity(Filter::BATCH_SIZE * 2);
         let mut cache = self.cache.write().await;
         std::mem::swap(cache.deref_mut(), &mut new_cache);
         return new_cache;
@@ -51,7 +54,7 @@ impl Filter {
         let capacity = AtomicU32::new(8192);
         let filter_inner = CountingBloomFilter::with_rate(4, 0.05, 8192);
         let inner = RwLock::new(filter_inner);
-        let cache = RwLock::new(HashMap::new());
+        let cache = RwLock::new(Vec::with_capacity(Filter::BATCH_SIZE * 2));
         let in_expand = AtomicBool::new(false);
         // let expand_thread = None;
         Self {
@@ -67,10 +70,10 @@ impl Filter {
         let size;
         {
             let mut cache = self.cache.write().await;
-            cache.insert(key, Operation::Delete);
+            cache.push((key, Operation::Delete));
             size = cache.len();
         }
-        if size > 64 {
+        if size > Filter::BATCH_SIZE {
             if self.in_expand.load(Ordering::Relaxed) == false {
                 let cache = self.fetch_cache().await;
                 let mut inner = self.inner.write().await;
@@ -83,10 +86,10 @@ impl Filter {
         let size;
         {
             let mut cache = self.cache.write().await;
-            cache.insert(key, Operation::Set);
+            cache.push((key, Operation::Set));
             size = cache.len();
         }
-        if size > 64 {
+        if size > Filter::BATCH_SIZE {
             if self.in_expand.load(Ordering::Relaxed) == false {
                 let cache = self.fetch_cache().await;
                 let mut inner = self.inner.write().await;
@@ -103,7 +106,12 @@ impl Filter {
         }
         if !find {
             let cache = self.cache.read().await;
-            find = matches!(cache.get(key), Some(Operation::Set));
+            for (k, v) in cache.iter() {
+                if k == key && matches!(v, Operation::Set) {
+                    find = true;
+                    break;
+                }
+            }
         }
         return find;
     }
