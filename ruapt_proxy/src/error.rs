@@ -8,7 +8,6 @@ pub enum ProxyError {
     RequestError(&'static str),
     RedisError,
     PoolError,
-    RocksError,
     EncodeError,
 }
 
@@ -33,12 +32,6 @@ impl From<RedisError> for ProxyError {
 impl From<bendy::encoding::Error> for ProxyError {
     fn from(_: bendy::encoding::Error) -> Self {
         Self::EncodeError
-    }
-}
-
-impl From<rocksdb::Error> for ProxyError {
-    fn from(_: rocksdb::Error) -> Self {
-        Self::RocksError
     }
 }
 

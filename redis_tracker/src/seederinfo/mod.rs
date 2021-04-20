@@ -72,10 +72,8 @@ impl SeederInfo {
             // interval
             RedisValue::Integer(1800),
             RedisValue::Buffer(peers),
-            RedisValue::Buffer(peers6)
-        ]
-
-        )
+            RedisValue::Buffer(peers6),
+        ])
     }
 
     pub fn delete(&mut self, uid: u64) {

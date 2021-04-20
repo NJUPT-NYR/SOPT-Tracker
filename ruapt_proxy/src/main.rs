@@ -1,13 +1,11 @@
 mod config;
+mod error;
+mod filter;
 mod tracker_route;
 
-mod error;
-use actix_web::*;
-use error::ProxyError;
 use crate::config::CONFIG;
+use actix_web::*;
 use tracker_route::*;
-
-pub type ProxyResult = Result<HttpResponse, ProxyError>;
 
 #[actix_web::main]
 pub async fn start_server() -> std::io::Result<()> {
@@ -15,10 +13,15 @@ pub async fn start_server() -> std::io::Result<()> {
     env_logger::init();
     dotenv::dotenv().ok();
 
+    println!("⭐⭐⭐⭐⭐⭐⭐⭐⭐ Initializing filter ⭐⭐⭐⭐⭐⭐⭐⭐⭐");
+    let keys = get_passkey_from_db().await;
+    context::CONTEXT.filter.expand(keys).await;
+    println!("⭐⭐⭐⭐⭐⭐⭐⭐ SOPT tracker is running ⭐⭐⭐⭐⭐⭐⭐⭐");
     HttpServer::new(|| {
         App::new()
             .wrap(middleware::Logger::default())
             .service(tracker_service())
+            .default_service(web::route().to(|| HttpResponse::NotFound().body("Not Found")))
     })
     .bind(&CONFIG.server_addr)?
     .run()
